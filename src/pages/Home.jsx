@@ -1,0 +1,5 @@
+import React,{useState} from 'react';
+import {Search} from 'lucide-react';
+import {Link} from 'react-router-dom';
+import VideoGrid,{SearchResults} from '../components/VideoGrid';
+export default function Home(){const [query,setQuery]=useState('');const q=query.trim();return <main className="wrap section farmday-feed"><div className="feed-heading"><div><span className="kicker">FARMDAY COMMUNITY</span><h1>Latest farm videos</h1><p className="muted">Real stories from farmers around the world. Keep scrolling to explore.</p></div></div><div className="home-video-search"><Search size={20}/><input aria-label="Search videos by title or description" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search videos by title or description…"/>{q&&<button type="button" onClick={()=>setQuery('')}>Clear</button>}</div>{q?<><div className="home-search-heading"><h2>Video results for “{q}”</h2><Link to={'/videos?q='+encodeURIComponent(q)}>Search farmers & farms too →</Link></div><SearchResults q={q}/></>:<VideoGrid infinite/>}</main>}
