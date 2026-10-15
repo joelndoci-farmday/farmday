@@ -1,0 +1,9 @@
+import React,{useEffect,useState} from 'react';
+import {supabase} from '../lib/supabase';
+export default function AdminTeam(){
+ const [users,setUsers]=useState([]),[me,setMe]=useState(null),[search,setSearch]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
+ async function load(){const {data,error}=await supabase.functions.invoke('farmday-youtube-admin-actions',{body:{action:'list_admins'}});if(error||data?.error){setMessage(data?.error||error?.message||'Could not load administrators');return;}setUsers(data.users||[]);setMe(data.owner_id);}
+ useEffect(()=>{load()},[]);
+ async function update(user_id,grant){if(!window.confirm(`${grant?'Grant':'Revoke'} administrator rights?`))return;setBusy(true);const {data,error}=await supabase.functions.invoke('farmday-youtube-admin-actions',{body:{action:'set_admin',user_id,grant}});setBusy(false);setMessage(data?.error||error?.message||(grant?'Administrator added.':'Administrator removed.'));if(data?.ok)load();}
+ return <section className="workflow-panel"><h2>Administrator access</h2><p className="muted">Only the FarmDay owner can appoint or remove administrators. The owner account cannot be removed.</p>{me&&<><input placeholder="Search username" value={search} onChange={e=>setSearch(e.target.value)}/><button className="btn outline" onClick={load}>Refresh users</button>{users.filter(u=>!search||u.user_name?.toLowerCase().includes(search.toLowerCase())).map(u=><div className="adminrow" key={u.id}><strong>{u.user_name||u.id}</strong><span>{u.id===me?'Owner':u.is_admin?'Administrator':'Member'}</span>{u.id!==me&&<button className="btn outline" disabled={busy} onClick={()=>update(u.id,!u.is_admin)}>{u.is_admin?'Remove admin':'Make admin'}</button>}</div>)}</>}{message&&<p className="notice">{message}</p>}</section>;
+}

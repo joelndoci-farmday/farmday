@@ -82,3 +82,69 @@
 
 /* Persistent account menu and bounded upload list */
 .account-menu{position:relative}.account-trigger{display:flex;align-items:center;gap:8px;cursor:pointer}.account-dropdown{position:absolute;right:0;top:calc(100% + 10px);z-index:1000;width:225px;background:#fff;border:1px solid #dce7de;border-radius:14px;box-shadow:0 16px 40px #183d2b25;padding:8px}.account-dropdown-name{font-weight:700;padding:12px 12px 8px;overflow:hidden;text-overflow:ellipsis}.account-dropdown a,.account-dropdown button{display:flex;align-items:center;gap:11px;width:100%;padding:12px;border:0;background:transparent;border-radius:8px;text-align:left;font:inherit;color:#183c2c;text-decoration:none;cursor:pointer}.account-dropdown a:hover,.account-dropdown button:hover,.account-dropdown a:focus-visible,.account-dropdown button:focus-visible{background:#edf6ec}.account-divider{height:1px;background:#e3eae3;margin:5px 0}.account-dropdown .account-signout{color:#a42f2c}.upload-filters{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0}.upload-filters button{background:white;border:1px solid #d7e4d8;border-radius:20px;padding:7px 11px;cursor:pointer;font:inherit;font-size:.8rem}.upload-filters button.active{background:#1c7345;color:white}.upload-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;font-size:.85rem}.upload-pagination button:disabled{opacity:.4;cursor:not-allowed}
+
+/* Registration agreement — clear consent before using FarmDay */
+.agreement-overlay{position:fixed;inset:0;z-index:2000;background:rgba(9,28,18,.68);display:grid;place-items:center;padding:16px}
+.agreement-modal{width:min(660px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:#fff;border-radius:22px;padding:26px;box-shadow:0 30px 100px #06170c66;color:#193c2b}
+.agreement-heading{display:flex;align-items:center;gap:13px;position:relative;padding-right:30px}.agreement-heading h2{font-size:23px;margin:0 0 3px}.agreement-heading p{font-size:12px;color:#738478;margin:0}.agreement-icon{background:#e9f5e7;color:#237646;padding:12px;border-radius:13px;display:grid;place-items:center}.agreement-dismiss{position:absolute;right:0;top:0;border:0;background:transparent;color:#587060;padding:6px}
+.agreement-intro{font-size:13px;line-height:1.6;color:#52685a;margin:18px 0}.agreement-choice{display:flex;align-items:flex-start;gap:11px;font-size:13px;font-weight:700;line-height:1.5;background:#f0f7ec;border:1px solid #d8e9d1;padding:13px;border-radius:12px;cursor:pointer}.agreement-choice input{width:18px;height:18px;flex:none;margin:1px 0;accent-color:#237646}.agreement-actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.agreement-actions .btn{flex:1}.agreement-actions button:disabled{opacity:.48;cursor:not-allowed}.agreement-scroll{background:#f8faf7;border:1px solid #e2ebe0;border-radius:12px;max-height:240px;overflow:auto;padding:16px;font-size:11px;line-height:1.65;color:#526459}.agreement-scroll>strong{font-size:13px;color:#193c2b}.agreement-scroll section{margin:15px 0}.agreement-scroll section strong{color:#244935}.agreement-scroll section p{margin:3px 0}.agreement-error{position:fixed;z-index:2100;bottom:14px;left:50%;transform:translateX(-50%);max-width:90vw;background:#fff1f1;color:#9d2828;padding:12px;border:1px solid #eab5b5;border-radius:9px;font-size:13px}.google{border-radius:12px!important;min-height:48px;box-shadow:0 2px 9px #152a1510;transition:box-shadow .15s,transform .15s}.google:hover{box-shadow:0 5px 16px #152a1525;transform:translateY(-1px)}
+@media(max-width:600px){.agreement-modal{padding:19px}.agreement-actions{flex-direction:column}.agreement-scroll{max-height:30dvh}}
+
+/* Admin review: persistent video thumbnails and direct owner Studio access */
+.admin-video-preview{display:flex;flex-direction:column;gap:5px;width:176px;flex-shrink:0;max-width:100%}
+.admin-video-preview.compact{width:138px}
+.admin-video-thumb{position:relative;display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:16/9;background:#e9eee9;border-radius:9px;overflow:hidden;color:#24513c;text-decoration:none}
+.admin-video-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.admin-video-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:white;background:rgba(0,0,0,.16)}
+.admin-video-play svg{padding:8px;box-sizing:content-box;border-radius:50%;background:rgba(0,0,0,.55)}
+.admin-video-placeholder{flex-direction:column;gap:5px;padding:8px;text-align:center}
+.admin-video-placeholder small{font-size:10px}
+.admin-studio-link{display:inline-flex;gap:4px;align-items:center;font-size:11px;color:#176a40;text-decoration:underline}
+@media(max-width:620px){.admin-video-preview.compact{width:110px}.admin-video-preview{width:150px}}
+.admin-video-preview .admin-video-thumb{border:0;cursor:pointer;padding:0;}
+.admin-video-preview .admin-video-thumb img{object-fit:cover;}
+.admin-video-preview .admin-video-thumb:focus-visible{outline:3px solid #248b54;outline-offset:3px;}
+.admin-video-preview .btn{font-size:12px;}
+
+/* Admin review: video cards with in-place playback */
+.admin-video-preview.compact{width:260px;max-width:42vw}
+.admin-video-preview:not(.compact){width:min(440px,100%)}
+.farmday-admin-player{width:100%;display:flex;flex-direction:column;gap:7px}
+.farmday-admin-player iframe,.farmday-admin-player video{width:100%;aspect-ratio:16/9;border:0;border-radius:10px;background:#111}
+.admin-video-preview .admin-video-thumb:disabled{cursor:not-allowed;opacity:1}
+@media(max-width:620px){.admin-video-preview.compact{width:155px;max-width:44vw}}
+/* Admin-only YouTube public catalog verification */
+.workflow-public-sync{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:14px 0 18px}
+.workflow-public-sync .notice{flex-basis:100%}
+
+/* Focused FarmDay administrator dashboard */
+.farmday-admin-intro{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}.farmday-admin-intro .pageTitle{margin:4px 0 8px}.farmday-admin-dashboard>.workflow-panel{border:1px solid #d9e6da;border-radius:18px;box-shadow:0 6px 24px #143c2410;padding:22px}.farmday-admin-secondary{margin-top:28px;padding:20px;border:1px solid #e1e9e1;border-radius:18px;background:#fbfdfb}.farmday-admin-secondary>h2{margin:0 0 8px}.farmday-admin-secondary>details,.farmday-sync-details{border:1px solid #dfe8df;border-radius:12px;margin:10px 0;background:white;overflow:hidden}.farmday-admin-secondary summary,.farmday-sync-details summary{cursor:pointer;padding:16px 18px;font-weight:650;color:#164c33;list-style-position:inside}.farmday-admin-secondary details[open]>summary,.farmday-sync-details[open]>summary{border-bottom:1px solid #e6eee6;background:#f2f8f2}.farmday-admin-secondary details>*:not(summary){margin:14px}.farmday-sync-details{margin:12px 0}.farmday-sync-details .workflow-public-sync{padding:12px}.farmday-admin-dashboard .workflow-tabs{margin-top:14px}.farmday-admin-dashboard .workflow-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.farmday-admin-dashboard .workflow-actions>.btn.primary{background:#176b44}.farmday-admin-dashboard .workflow-actions>.muted{flex-basis:100%}@media(max-width:700px){.farmday-admin-dashboard>.workflow-panel{padding:12px}.farmday-admin-secondary{padding:12px}}
+/* FarmDay moderation: primary actions remain readable on narrow screens */
+.workflow-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.workflow-actions input[placeholder="Details (optional)"]{min-width:190px;max-width:320px;flex:1}
+.workflow-actions label:has(select){display:flex;align-items:center;gap:6px;font-size:12px}
+.workflow-actions select{max-width:250px;min-width:145px}
+@media(max-width:720px){.workflow-actions{align-items:stretch}.workflow-actions .btn{width:100%}.workflow-actions label:has(select){width:100%}.workflow-actions select{max-width:none;flex:1}}
+
+/* YouTube authorization health: verified only after server-side Google checks */
+.farmday-youtube-health{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border:1px solid #d7e6da;border-radius:15px;background:#f8fcf8;padding:16px 20px;margin:0 0 18px}
+.farmday-youtube-health-main{display:flex;align-items:center;gap:12px}
+.farmday-youtube-health-indicator{display:grid;place-items:center;width:35px;height:35px;border-radius:50%;font-size:20px;font-weight:700}
+.farmday-youtube-health-indicator.verified{background:#e0f4e4;color:#18733b}
+.farmday-youtube-health-indicator.needs-attention{background:#fff0d7;color:#9a5700}
+.farmday-youtube-health .rowactions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+@media(max-width:650px){.farmday-youtube-health{align-items:stretch}.farmday-youtube-health .rowactions{width:100%}}
+
+/* FarmDay: compact YouTube similarity comparison panel */
+.farmday-similarity{margin-top:10px;padding-top:8px;border-top:1px solid #dce8df}
+.farmday-similarity-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin:12px 0}
+.farmday-similarity-card{min-width:0;padding:8px;border:1px solid #dbe5de;border-radius:10px;background:#fff;display:flex;flex-direction:column;gap:5px}
+.farmday-similarity-thumb{position:relative;border:0;padding:0;background:#142c21;cursor:pointer;border-radius:7px;overflow:hidden;width:100%;aspect-ratio:16/9}
+.farmday-similarity-thumb img{width:100%;height:100%;object-fit:cover}
+.farmday-similarity-thumb span{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#173b30dd;color:white;padding:7px 12px;border-radius:30px}
+.farmday-similarity-card iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:7px}
+.farmday-similarity-card [hidden]{display:none!important}
+.farmday-similarity-card a{font-size:12px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+.farmday-similarity-card small{color:#607168}
+
+.farmday-media-report{margin:8px 0;padding:9px 12px;border-radius:8px;background:#f4f7f4;color:#365442;font-size:12px;line-height:1.6}
