@@ -2,12 +2,13 @@
 """Private FarmDay video analysis. Never infers copyright clearance or YPP approval."""
 import json, os, sys, tempfile, subprocess, urllib.request, urllib.parse
 from pathlib import Path
-from analyze import sha256, visual_hashes, audio_fp, similarity
+from analyze import sha256, visual_hashes, audio_fp
+from similarity import ranked_matches
 
 BASE=os.environ.get("SUPABASE_URL","").rstrip("/")
 KEY=os.environ.get("SUPABASE_SERVICE_ROLE_KEY","")
 BUCKET="farmday-admin-review"
-ENGINE="github-actions-ffmpeg-v1"
+ENGINE="github-actions-ffmpeg-v2"
 def api(path, method="GET", payload=None):
     url=BASE+path
     body=json.dumps(payload).encode() if payload is not None else None
@@ -60,22 +61,31 @@ def main():
                 digest=sha256(dest)
                 frames=visual_hashes(dest)
                 audio=audio_fp(dest)
-                others=rows("farmday_media_analysis",{"select":"upload_id,video_sha256,visual_fingerprint","video_analysis_status":"eq.analyzed","limit":"500"})
-                exact=[]; visual=[]
-                for other in others:
-                    if other["upload_id"]==upload["id"]:continue
-                    if other.get("video_sha256")==digest:exact.append(other["upload_id"])
-                    try:
-                        stored=json.loads(other.get("visual_fingerprint") or "{}")
-                        score=similarity(frames,stored.get("frame_dhashes",[]))
-                        if score>=0.3:visual.append({"upload_id":other["upload_id"],"match_ratio":score})
-                    except (ValueError,TypeError):pass
-                visual.sort(key=lambda x:x["match_ratio"],reverse=True)
-                findings={"exact_duplicate_upload_ids":exact[:20],"possible_visual_matches":visual[:20],"audio_fingerprint_available":audio.get("status")=="analyzed","comparison_scope":"FarmDay previously analyzed videos only","limitations":"No global Content ID access; fingerprints do not establish rights"}
-                record={"provider":ENGINE,"video_sha256":digest,"visual_fingerprint":json.dumps({"algorithm":"dhash-9x8-5sec-v1","frame_dhashes":frames}),"audio_fingerprint":str(audio.get("fingerprint") or "")[:20000],"video_analysis_status":"analyzed" if frames else "no_frames","audio_analysis_status":audio["status"],"duplicate_analysis_status":"possible_match" if exact or visual else "no_match_in_local_library","copyright_analysis_status":"requires_rights_evidence","findings":findings,"evidence":{"source":"private original upload","bytes":size,"engine":ENGINE},"decision":"hold","decision_reason":"Human rights and monetization review required"}
+                others=rows("farmday_media_analysis",{"select":"upload_id,video_sha256,visual_fingerprint,audio_fingerprint","video_analysis_status":"eq.analyzed","limit":"500"})
+                audio_raw=audio.get("fingerprint") if isinstance(audio.get("fingerprint"),list) else []
+                matches=ranked_matches(frames,audio_raw,others,digest,upload["id"])
+                findings={
+                    "similar_media":matches,
+                    "ranking_weights":{"visual":0.60,"audio":0.35,"exact_file":0.05,"title":0.0},
+                    "audio_fingerprint_available":audio.get("status")=="analyzed",
+                    "comparison_scope":"FarmDay previously analyzed videos only",
+                    "limitations":"No global Content ID access. Visual/audio matching is not copyright or monetization clearance."
+                }
+                record={
+                    "provider":ENGINE,"video_sha256":digest,
+                    "visual_fingerprint":json.dumps({"algorithm":"dhash-9x8-5sec-v1","frame_dhashes":frames}),
+                    "audio_fingerprint":json.dumps(audio_raw),
+                    "video_analysis_status":"analyzed" if frames else "no_frames",
+                    "audio_analysis_status":audio["status"],
+                    "duplicate_analysis_status":"possible_match" if matches else "no_match_in_local_library",
+                    "copyright_analysis_status":"requires_rights_evidence",
+                    "findings":findings,
+                    "evidence":{"source":"private original upload","bytes":size,"engine":ENGINE},
+                    "decision":"hold","decision_reason":"Human rights and monetization review required"
+                }
                 update(upload["id"],record)
                 completed+=1
-                print("Analyzed",upload["id"],"frames",len(frames),"exact matches",len(exact),"visual candidates",len(visual))
+                print("Analyzed",upload["id"],"frames",len(frames),"exact matches",len(matches),"A/V candidates")
         except Exception as error:
             print("Analysis failed for",upload["id"],str(error)[:300],file=sys.stderr)
             update(upload["id"],{"provider":ENGINE,"video_analysis_status":"failed","copyright_analysis_status":"unverified","decision":"hold","decision_reason":"Technical media analysis failed; manual review required","findings":{"error_type":type(error).__name__}})
