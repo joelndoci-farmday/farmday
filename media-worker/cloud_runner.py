@@ -9,6 +9,7 @@ BASE=os.environ.get("SUPABASE_URL","").rstrip("/")
 KEY=os.environ.get("SUPABASE_SERVICE_ROLE_KEY","")
 BUCKET="farmday-admin-review"
 ENGINE="github-actions-ffmpeg-v2"
+BATCH_SIZE=max(1,min(int(os.environ.get("FARMDAY_BATCH_SIZE","5")),20))
 def api(path, method="GET", payload=None):
     url=BASE+path
     body=json.dumps(payload).encode() if payload is not None else None
@@ -27,9 +28,10 @@ def main():
     if not BASE.startswith("https://") or not KEY:
         raise SystemExit("Configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY as GitHub Actions secrets")
     requested=os.environ.get("FARMDAY_UPLOAD_ID","").strip()
-    sessions=rows("farmday_youtube_upload_sessions",{"select":"id,user_id,youtube_video_id,state","state":"eq.completed","order":"updated_at.desc","limit":"100"})
+    sessions=rows("farmday_youtube_upload_sessions",{"select":"id,user_id,youtube_video_id,state","state":"eq.completed","order":"updated_at.desc","limit":"1000"})
     completed=0
     for session in sessions:
+        if completed>=BATCH_SIZE:break
         uploads=rows("farmday_uploads",{"select":"id,user_id","storage_path":"eq.youtube-private/"+session["youtube_video_id"]})
         if not uploads: continue
         upload=uploads[0]
@@ -45,7 +47,7 @@ def main():
             signed=api("/storage/v1/object/sign/"+BUCKET+"/"+urllib.parse.quote(path,safe="/"),"POST",{"expiresIn":600})
             signed_url=signed.get("signedURL") or signed.get("signedUrl")
             if not signed_url:raise RuntimeError("Missing signed download URL")
-            url=BASE+signed_url if signed_url.startswith("/") else signed_url
+            url=(BASE+("/storage/v1"+signed_url if signed_url.startswith("/object/") else signed_url)) if signed_url.startswith("/") else signed_url
             with tempfile.TemporaryDirectory() as tmp:
                 dest=Path(tmp)/"original-video"
                 req=urllib.request.Request(url)
@@ -89,5 +91,5 @@ def main():
         except Exception as error:
             print("Analysis failed for",upload["id"],str(error)[:300],file=sys.stderr)
             update(upload["id"],{"provider":ENGINE,"video_analysis_status":"failed","copyright_analysis_status":"unverified","decision":"hold","decision_reason":"Technical media analysis failed; manual review required","findings":{"error_type":type(error).__name__}})
-    print("Completed",completed,"video(s). Videos without private originals are not marked analyzed.")
+    print("Completed",completed,"video(s), batch limit",BATCH_SIZE,". Pending originals will be retried on subsequent runs.")
 if __name__=="__main__":main()
