@@ -5,6 +5,7 @@ import {supabase} from '../lib/supabase';
 import {useAuth} from '../context/AuthContext';
 import {TERMS_VERSION} from '../lib/uploadTerms';
 import {analyzeOriginalFile} from '../lib/mediaFingerprint';
+import {savePrivateReviewCopy} from '../lib/privateReviewUpload';
 const MAX=1024*1024*1024;
 const CHUNK=2*1024*1024;
 export default function UploadPage(){
@@ -24,6 +25,19 @@ export default function UploadPage(){
   const saveSignals=async(uploadId)=>{if(!signals?.sha256||!uploadId)return;const {error}=await supabase.rpc('farmday_submit_client_fingerprints',{p_upload_id:uploadId,p_sha256:signals.sha256,p_visual:signals.visual||'',p_audio:''});setAnalysisMessage(error?'Fingerprint storage pending: '+error.message:'Preliminary fingerprint recorded. Rights and monetization remain unverified.')};
   const {data:start,error:startError}=await supabase.functions.invoke('farmday-youtube-upload',{body:{action:'start',title:title.trim(),description:description.trim(),mime_type:file.type,total_bytes:file.size,terms_version:TERMS_VERSION}});
   if(startError||!start?.session_id)throw new Error(start?.error||startError?.message||'Could not start video upload.');
+  // Preserve a private original for real cloud analysis on small uploads only.
+  // A failed private copy must never falsely mark the video as analyzed.
+  if(file.size<=40*1024*1024){
+   try{
+    setAnalysisMessage('Saving private original for cloud video/audio analysis…');
+    await savePrivateReviewCopy(file,user.id,start.session_id);
+    setAnalysisMessage('Private original saved; cloud analysis pending.');
+   }catch(err){
+    setAnalysisMessage('Cloud original unavailable: '+(err?.message||'private copy failed')+'. Technical analysis will remain pending.');
+   }
+  }else{
+   setAnalysisMessage('Video exceeds 40 MB cloud-copy pilot limit. Full cloud analysis pending.');
+  }
   const {data:{session}}=await supabase.auth.getSession();
   if(!session?.access_token)throw new Error('Please sign in again.');
   let offset=0;
