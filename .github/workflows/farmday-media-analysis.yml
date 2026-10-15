@@ -1,0 +1,32 @@
+name: FarmDay private media analysis
+on:
+  workflow_dispatch:
+    inputs:
+      upload_id:
+        description: 'Optional upload UUID (blank = pending originals)'
+        required: false
+        type: string
+  schedule:
+    - cron: '*/30 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: farmday-private-media-worker
+  cancel-in-progress: false
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: github.repository == 'joelndoci-farmday/farmday'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install FFmpeg and Chromaprint
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libchromaprint-tools
+      - name: Analyze privately stored originals
+        env:
+          SUPABASE_URL: ${{ secrets.FARMDAY_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FARMDAY_SUPABASE_SERVICE_ROLE_KEY }}
+          FARMDAY_UPLOAD_ID: ${{ inputs.upload_id }}
+        run: python3 media-worker/cloud_runner.py
