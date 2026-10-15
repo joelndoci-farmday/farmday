@@ -38,7 +38,7 @@ def visual_hashes(path):
 def audio_fp(path):
     if not shutil.which('fpcalc'):return {'status':'unavailable','reason':'Chromaprint fpcalc is not installed'}
     try:
-        data=json.loads(cmd(['fpcalc','-json','-length','120',str(path)]))
+        data=json.loads(cmd(['fpcalc','-raw','-json','-length','120',str(path)]))
         return {'status':'analyzed','fingerprint':data.get('fingerprint'),'duration':data.get('duration')}
     except Exception as e:return {'status':'failed','reason':str(e)[:200]}
 
