@@ -24,6 +24,8 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg libchromaprint-tools
+      - name: Test similarity engine
+        run: python3 -m unittest discover -s media-worker -p 'test_*.py' -v
       - name: Analyze privately stored originals
         env:
           SUPABASE_URL: ${{ secrets.FARMDAY_SUPABASE_URL }}
