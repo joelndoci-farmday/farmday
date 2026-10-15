@@ -28,7 +28,7 @@ def main():
     if not BASE.startswith("https://") or not KEY:
         raise SystemExit("Configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY as GitHub Actions secrets")
     requested=os.environ.get("FARMDAY_UPLOAD_ID","").strip()
-    sessions=rows("farmday_youtube_upload_sessions",{"select":"id,user_id,youtube_video_id,state","state":"eq.completed","order":"updated_at.desc","limit":"100"})
+    sessions=rows("farmday_youtube_upload_sessions",{"select":"id,user_id,youtube_video_id,state","state":"eq.completed","order":"updated_at.desc","limit":"1000"})
     completed=0
     for session in sessions:
         if completed>=BATCH_SIZE:break
