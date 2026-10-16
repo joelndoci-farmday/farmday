@@ -16,7 +16,10 @@ def api(path, method="GET", payload=None):
     body=json.dumps(payload).encode() if payload is not None else None
     headers={"apikey":KEY,"Authorization":"Bearer "+KEY,"Accept":"application/json"}
     if body is not None: headers["Content-Type"]="application/json"
-    if method=="POST" and (path.startswith("/rest/v1/farmday_media_analysis?") or path.startswith("/rest/v1/farmday_youtube_similarity_checks?")):\n        headers["Prefer"]="return=representation,resolution=merge-duplicates"\n    elif method in ("POST","PATCH"):\n        headers["Prefer"]="return=representation"
+    if method=="POST" and (path.startswith("/rest/v1/farmday_media_analysis?") or path.startswith("/rest/v1/farmday_youtube_similarity_checks?")):
+        headers["Prefer"]="return=representation,resolution=merge-duplicates"
+    elif method in ("POST","PATCH"):
+        headers["Prefer"]="return=representation"
     req=urllib.request.Request(url,data=body,headers=headers,method=method)
     try:
         with urllib.request.urlopen(req,timeout=90) as response:
