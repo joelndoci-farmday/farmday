@@ -15,7 +15,7 @@ def api(path, method="GET", payload=None):
     body=json.dumps(payload).encode() if payload is not None else None
     headers={"apikey":KEY,"Authorization":"Bearer "+KEY,"Accept":"application/json"}
     if body is not None: headers["Content-Type"]="application/json"
-    if method in ("POST","PATCH"): headers["Prefer"]="return=representation,resolution=merge-duplicates"
+    if method=="POST" and path.startswith("/rest/v1/farmday_media_analysis?"):\n        headers["Prefer"]="return=representation,resolution=merge-duplicates"\n    elif method in ("POST","PATCH"):\n        headers["Prefer"]="return=representation"
     req=urllib.request.Request(url,data=body,headers=headers,method=method)
     with urllib.request.urlopen(req,timeout=90) as response:
         data=response.read()
