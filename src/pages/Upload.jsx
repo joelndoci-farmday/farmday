@@ -5,6 +5,7 @@ import {supabase} from '../lib/supabase';
 import {useAuth} from '../context/AuthContext';
 import {TERMS_VERSION} from '../lib/uploadTerms';
 import {analyzeOriginalFile} from '../lib/mediaFingerprint';
+import {savePrivateReviewCopy} from '../lib/privateReviewUpload';
 const MAX=1024*1024*1024;
 const CHUNK=2*1024*1024;
 export default function UploadPage(){
@@ -27,9 +28,10 @@ export default function UploadPage(){
   const {data:start,error:startError}=await supabase.functions.invoke('farmday-youtube-upload',{body:{action:'start',title:title.trim(),description:description.trim(),mime_type:file.type,total_bytes:file.size,terms_version:TERMS_VERSION}});
   if(startError||!start?.session_id)throw new Error(start?.error||startError?.message||'Could not start video upload.');
   startSessionId=start.session_id;
-  // The video is delivered to YouTube only. No persistent private video copy.
-  // Browser-side visual and audio sampling are preliminary, not server verification.
-  setAnalysisMessage('Video stored on YouTube only. Local audio/video samples are preliminary and require manual review.');
+  // Temporary private original: the server worker deletes it after successful analysis.
+  // Never send the video to YouTube if the required review copy failed.
+  await savePrivateReviewCopy(file,user.id,start.session_id);
+  setAnalysisMessage('Private analysis copy ready. Server FFmpeg/Chromaprint analysis queued.');
   const {data:{session}}=await supabase.auth.getSession();
   if(!session?.access_token)throw new Error('Please sign in again.');
   let offset=0;
