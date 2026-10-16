@@ -8,8 +8,6 @@ on:
         type: string
   repository_dispatch:
     types: [farmday_media_ready]
-  schedule:
-    - cron: '*/5 * * * *'
 permissions:
   contents: read
 concurrency:
