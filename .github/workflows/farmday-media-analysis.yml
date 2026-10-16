@@ -6,8 +6,10 @@ on:
         description: 'Optional upload UUID (blank = pending originals)'
         required: false
         type: string
+  repository_dispatch:
+    types: [farmday_media_ready]
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '*/5 * * * *'
 permissions:
   contents: read
 concurrency:
@@ -30,5 +32,4 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.FARMDAY_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FARMDAY_SUPABASE_SERVICE_ROLE_KEY }}
-          FARMDAY_UPLOAD_ID: ${{ inputs.upload_id }}
         run: python3 media-worker/cloud_runner.py
