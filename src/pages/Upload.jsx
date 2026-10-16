@@ -36,7 +36,9 @@ export default function UploadPage(){
     await savePrivateReviewCopy(file,user.id,start.session_id);
     setAnalysisMessage('Private original saved; cloud analysis pending.');
    }catch(err){
-    setAnalysisMessage('Cloud original unavailable: '+(err?.message||'private copy failed')+'. Technical analysis will remain pending.');
+    // Do not silently finish a YouTube upload that cannot enter server analysis.
+    // Keep the session pending and show the real Storage/TUS error to the uploader.
+    throw new Error('Private analysis upload failed: '+(err?.message||'unknown storage error')+'. The YouTube transfer was not started. Please retry or contact Farmday support.');
    }
   }
   const {data:{session}}=await supabase.auth.getSession();
