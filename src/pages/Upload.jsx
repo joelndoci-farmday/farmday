@@ -25,9 +25,9 @@ export default function UploadPage(){
   const saveSignals=async(uploadId)=>{if(!signals?.sha256||!uploadId)return;const {error}=await supabase.rpc('farmday_submit_client_fingerprints',{p_upload_id:uploadId,p_sha256:signals.sha256,p_visual:signals.visual||'',p_audio:''});setAnalysisMessage(error?'Fingerprint storage pending: '+error.message:'Preliminary fingerprint recorded. Rights and monetization remain unverified.')};
   const {data:start,error:startError}=await supabase.functions.invoke('farmday-youtube-upload',{body:{action:'start',title:title.trim(),description:description.trim(),mime_type:file.type,total_bytes:file.size,terms_version:TERMS_VERSION}});
   if(startError||!start?.session_id)throw new Error(start?.error||startError?.message||'Could not start video upload.');
-  // Preserve a private original for real cloud analysis on small uploads only.
-  // A failed private copy must never falsely mark the video as analyzed.
-  if(file.size<=40*1024*1024){
+  // Attempt a private original for every supported upload, not just videos <=40 MB.
+  // Storage quotas may still reject large files; never mark such files analyzed.
+  {
    try{
     setAnalysisMessage('Saving private original for cloud video/audio analysis…');
     await savePrivateReviewCopy(file,user.id,start.session_id);
@@ -35,8 +35,6 @@ export default function UploadPage(){
    }catch(err){
     setAnalysisMessage('Cloud original unavailable: '+(err?.message||'private copy failed')+'. Technical analysis will remain pending.');
    }
-  }else{
-   setAnalysisMessage('Video exceeds 40 MB cloud-copy pilot limit. Full cloud analysis pending.');
   }
   const {data:{session}}=await supabase.auth.getSession();
   if(!session?.access_token)throw new Error('Please sign in again.');
