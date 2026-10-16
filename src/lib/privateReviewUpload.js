@@ -15,12 +15,33 @@ export async function savePrivateReviewCopy(file,userId,sessionId,onProgress=()=
  const uploadUrl=new URL(location,url).toString();
  let offset=0;
  while(offset<file.size){
-  const chunk=file.slice(offset,Math.min(file.size,offset+6*1024*1024));
-  const response=await fetch(uploadUrl,{method:'PATCH',headers:{...headers,'Content-Type':'application/offset+octet-stream','Upload-Offset':String(offset)},body:chunk});
-  if(!response.ok)throw new Error(`Private preview transfer failed (${response.status}): ${await response.text()}`);
-  const next=Number(response.headers.get('Upload-Offset'));
-  offset=Number.isFinite(next)&&next>offset?next:offset+chunk.size;
-  onProgress(Math.round(offset/file.size*100));
+  let sent=false;
+  for(let attempt=0;attempt<4&&!sent;attempt++){
+   try{
+    const chunk=file.slice(offset,Math.min(file.size,offset+6*1024*1024));
+    const response=await fetch(uploadUrl,{method:'PATCH',headers:{...headers,'Content-Type':'application/offset+octet-stream','Upload-Offset':String(offset)},body:chunk});
+    if(!response.ok)throw new Error(`Private preview transfer failed (${response.status}): ${await response.text()}`);
+    const next=Number(response.headers.get('Upload-Offset'));
+    if(!Number.isFinite(next)||next<=offset||next>file.size)throw new Error('Invalid private upload offset');
+    offset=next;
+    onProgress(Math.round(offset/file.size*100));
+    sent=true;
+   }catch(err){
+    // A PATCH may have succeeded before the connection dropped. Ask TUS for
+    // the authoritative offset rather than blindly resending the same bytes.
+    try{
+     const head=await fetch(uploadUrl,{method:'HEAD',headers});
+     if(head.ok){
+      const remote=Number(head.headers.get('Upload-Offset'));
+      if(Number.isFinite(remote)&&remote>=offset&&remote<=file.size){
+       if(remote>offset){offset=remote;onProgress(Math.round(offset/file.size*100));sent=true;break;}
+      }
+     }
+    }catch{/* Retry the same offset if the status request also fails. */}
+    if(attempt===3)throw err;
+    await new Promise(resolve=>setTimeout(resolve,Math.min(1000*2**attempt,5000)));
+   }
+  }
  }
  const {error}=await supabase.from('farmday_review_previews').insert({session_id:sessionId,user_id:userId,storage_path:objectName});
  if(error)throw error;
