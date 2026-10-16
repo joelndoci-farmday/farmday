@@ -28,40 +28,39 @@ def main():
     if not BASE.startswith("https://") or not KEY:
         raise SystemExit("Configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY as GitHub Actions secrets")
     requested=os.environ.get("FARMDAY_UPLOAD_ID","").strip()
-    sessions=rows("farmday_youtube_upload_sessions",{"select":"id,user_id,youtube_video_id,state","state":"eq.completed","order":"updated_at.desc","limit":"1000"})
-    completed=0
-    stats={"sessions":len(sessions),"no_upload":0,"no_private_original":0,"already_analyzed":0,"failed":0,"eligible":0}
-    print("Worker preflight: completed upload sessions",len(sessions),"batch limit",BATCH_SIZE,flush=True)
-    for session in sessions:
-        if completed>=BATCH_SIZE:break
-        uploads=rows("farmday_uploads",{"select":"id,user_id","storage_path":"eq.youtube-private/"+session["youtube_video_id"]})
-        if not uploads:
-            stats["no_upload"]+=1
-            continue
-        upload=uploads[0]
-        if requested and upload["id"]!=requested:continue
-        previews=rows("farmday_review_previews",{"select":"storage_path","session_id":"eq."+session["id"],"user_id":"eq."+session["user_id"],"limit":"1"})
-        if not previews:
-            stats["no_private_original"]+=1
-            print("Pending original registration for upload",upload["id"],"session",session["id"],flush=True)
-            continue
-        existing=rows("farmday_media_analysis",{"select":"provider,video_analysis_status","upload_id":"eq."+upload["id"]})
-        if existing and existing[0].get("provider")==ENGINE and existing[0].get("video_analysis_status")=="analyzed" and not requested:
-            stats["already_analyzed"]+=1
-            continue
-        path=previews[0]["storage_path"]
-        if not path.startswith(session["user_id"]+"/"+session["id"]+"/"):continue
-        stats["eligible"]+=1
-        print("Analyzing upload",upload["id"],flush=True)
+    # Atomic claim: concurrent runners cannot process the same video simultaneously.
+    jobs=api("/rest/v1/rpc/farmday_claim_media_jobs","POST",{"p_limit":BATCH_SIZE})
+    stats={"claimed":len(jobs),"analyzed":0,"failed":0,"incomplete":0}
+    print("FARMDAY_QUEUE_CLAIMED",len(jobs),flush=True)
+    for job in jobs:
+        upload_id=job["upload_id"]
+        session_id=job["session_id"]
         try:
-            signed=api("/storage/v1/object/sign/"+BUCKET+"/"+urllib.parse.quote(path,safe="/"),"POST",{"expiresIn":600})
+            if requested and requested!=upload_id:
+                api("/rest/v1/rpc/farmday_finish_media_job","POST",{"p_upload_id":upload_id,"p_success":False,"p_error":"Not requested by targeted run"})
+                continue
+            sessions=rows("farmday_youtube_upload_sessions",{"select":"id,user_id,state","id":"eq."+session_id,"limit":"1"})
+            previews=rows("farmday_review_previews",{"select":"storage_path","session_id":"eq."+session_id,"limit":"1"})
+            if not sessions or not previews or sessions[0]["state"]!="completed":
+                raise RuntimeError("Completed session or registered private original missing")
+            session=sessions[0]
+            path=previews[0]["storage_path"]
+            if not path.startswith(session["user_id"]+"/"+session_id+"/"):
+                raise RuntimeError("Private original session ownership mismatch")
+            existing=rows("farmday_media_analysis",{"select":"provider,video_analysis_status,audio_analysis_status","upload_id":"eq."+upload_id})
+            if existing and existing[0].get("provider")==ENGINE and existing[0].get("video_analysis_status")=="analyzed" and existing[0].get("audio_analysis_status")=="analyzed":
+                api("/rest/v1/rpc/farmday_finish_media_job","POST",{"p_upload_id":upload_id,"p_success":True})
+                stats["analyzed"]+=1
+                print("Already analyzed",upload_id,flush=True)
+                continue
+            print("Analyzing upload",upload_id,"attempt",job["attempts"],flush=True)
+            signed=api("/storage/v1/object/sign/"+BUCKET+"/"+urllib.parse.quote(path,safe="/"),"POST",{"expiresIn":3600})
             signed_url=signed.get("signedURL") or signed.get("signedUrl")
-            if not signed_url:raise RuntimeError("Missing signed download URL")
+            if not signed_url: raise RuntimeError("Missing signed download URL")
             url=(BASE+("/storage/v1"+signed_url if signed_url.startswith("/object/") else signed_url)) if signed_url.startswith("/") else signed_url
             with tempfile.TemporaryDirectory() as tmp:
                 dest=Path(tmp)/"original-video"
-                req=urllib.request.Request(url)
-                with urllib.request.urlopen(req,timeout=120) as source,open(dest,"wb") as target:
+                with urllib.request.urlopen(urllib.request.Request(url),timeout=180) as source,open(dest,"wb") as target:
                     size=0
                     while True:
                         block=source.read(1024*1024)
@@ -75,13 +74,14 @@ def main():
                 audio=audio_fp(dest)
                 others=rows("farmday_media_analysis",{"select":"upload_id,video_sha256,visual_fingerprint,audio_fingerprint","video_analysis_status":"eq.analyzed","limit":"500"})
                 audio_raw=audio.get("fingerprint") if isinstance(audio.get("fingerprint"),list) else []
-                matches=ranked_matches(frames,audio_raw,others,digest,upload["id"])
+                matches=ranked_matches(frames,audio_raw,others,digest,upload_id)
                 findings={
                     "similar_media":matches,
                     "ranking_weights":{"visual":0.60,"audio":0.35,"exact_file":0.05,"title":0.0},
                     "audio_fingerprint_available":audio.get("status")=="analyzed",
                     "comparison_scope":"FarmDay previously analyzed videos only",
-                    "limitations":"No global Content ID access. Visual/audio matching is not copyright or monetization clearance."
+                    "youtube_search_scope":"YouTube title results are separate candidates, NOT fingerprint matches",
+                    "limitations":"No global Content ID access. Media matching is not copyright or monetization clearance."
                 }
                 record={
                     "provider":ENGINE,"video_sha256":digest,
@@ -93,17 +93,22 @@ def main():
                     "copyright_analysis_status":"requires_rights_evidence",
                     "findings":findings,
                     "evidence":{"source":"private original upload","bytes":size,"engine":ENGINE},
-                    "decision":"hold","decision_reason":"Human rights and monetization review required"
+                    "decision":"hold","decision_reason":"Human rights and YouTube monetization review required"
                 }
-                update(upload["id"],record)
-                completed+=1
-                print("Analyzed",upload["id"],"frames",len(frames),"exact matches",len(matches),"A/V candidates")
+                update(upload_id,record)
+                if not frames or audio["status"]!="analyzed":
+                    raise RuntimeError("Video/audio analysis incomplete: frames="+str(len(frames))+" audio="+audio["status"])
+                api("/rest/v1/rpc/farmday_finish_media_job","POST",{"p_upload_id":upload_id,"p_success":True})
+                stats["analyzed"]+=1
+                print("Analyzed",upload_id,"frames",len(frames),"audio samples",len(audio_raw),"matches",len(matches),flush=True)
         except Exception as error:
             stats["failed"]+=1
-            print("Analysis failed for",upload["id"],str(error)[:300],file=sys.stderr,flush=True)
-            update(upload["id"],{"provider":ENGINE,"video_analysis_status":"failed","copyright_analysis_status":"unverified","decision":"hold","decision_reason":"Technical media analysis failed; manual review required","findings":{"error_type":type(error).__name__}})
-    print("FARMDAY_WORKER_SUMMARY",json.dumps({**stats,"analyzed":completed}),flush=True)
-    print("Completed",completed,"video(s), batch limit",BATCH_SIZE,". Pending originals will be retried on subsequent runs.",flush=True)
-    if stats["failed"]:
-        raise SystemExit("Media analysis failed for "+str(stats["failed"])+" upload(s); see logs")
+            print("Analysis failed",upload_id,str(error)[:300],file=sys.stderr,flush=True)
+            try:
+                update(upload_id,{"provider":ENGINE,"video_analysis_status":"failed","audio_analysis_status":"failed","copyright_analysis_status":"unverified","decision":"hold","decision_reason":"Technical media analysis failed; manual review required","findings":{"error_type":type(error).__name__,"error":str(error)[:250]}})
+                api("/rest/v1/rpc/farmday_finish_media_job","POST",{"p_upload_id":upload_id,"p_success":False,"p_error":str(error)[:500]})
+            except Exception as recording_error:
+                print("Could not persist job failure",str(recording_error)[:300],file=sys.stderr,flush=True)
+    print("FARMDAY_WORKER_SUMMARY",json.dumps(stats),flush=True)
+    if stats["failed"]:raise SystemExit("Some media analyses failed; queued for retry where attempts remain")
 if __name__=="__main__":main()
