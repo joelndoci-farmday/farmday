@@ -22,9 +22,12 @@ export default function UploadPage(){
  try{
   let signals=null;
   try{signals=await analyzeOriginalFile(file,setAnalysisMessage)}catch(err){setAnalysisMessage('Preliminary fingerprint unavailable: '+err.message)}
+  const requestAnalysis=async()=>{try{const {data}=await supabase.functions.invoke('farmday-media-kick',{body:{session_id:startSessionId}});if(data?.immediate)setAnalysisMessage('Server video/audio analysis requested immediately.');else setAnalysisMessage('Server analysis queued; automatic worker checks pending jobs every 5 minutes.')}catch{setAnalysisMessage('Upload complete; server analysis will be retried by the scheduled worker.')}};
+  let startSessionId='';
   const saveSignals=async(uploadId)=>{if(!signals?.sha256||!uploadId)return;const {error}=await supabase.rpc('farmday_submit_client_fingerprints',{p_upload_id:uploadId,p_sha256:signals.sha256,p_visual:signals.visual||'',p_audio:''});setAnalysisMessage(error?'Fingerprint storage pending: '+error.message:'Preliminary fingerprint recorded. Rights and monetization remain unverified.')};
   const {data:start,error:startError}=await supabase.functions.invoke('farmday-youtube-upload',{body:{action:'start',title:title.trim(),description:description.trim(),mime_type:file.type,total_bytes:file.size,terms_version:TERMS_VERSION}});
   if(startError||!start?.session_id)throw new Error(start?.error||startError?.message||'Could not start video upload.');
+  startSessionId=start.session_id;
   // Attempt a private original for every supported upload, not just videos <=40 MB.
   // Storage quotas may still reject large files; never mark such files analyzed.
   {
@@ -49,12 +52,12 @@ export default function UploadPage(){
      if(!response.ok){if(response.status===409&&Number.isFinite(result.offset_bytes)){offset=result.offset_bytes;succeeded=true;break;}throw new Error(result.error||`Transfer failed (${response.status})`);}
      offset=result.offset_bytes;
      setProgress(Math.min(100,Math.round(offset/file.size*100)));
-     if(result.completed){await saveSignals(result.upload_id);setStage('done');return;}
+     if(result.completed){await saveSignals(result.upload_id);await requestAnalysis();setStage('done');return;}
      succeeded=true;
     }catch(error){
      if(attempt===2)throw error;
      const {data:state,error:statusError}=await supabase.functions.invoke('farmday-youtube-upload',{body:{action:'status',session_id:start.session_id}});
-     if(!statusError&&state?.state==='completed'){setAnalysisMessage('Upload complete; fingerprint record may need retry.');setStage('done');return;}
+     if(!statusError&&state?.state==='completed'){await requestAnalysis();setStage('done');return;}
      if(!statusError&&Number.isFinite(state?.offset_bytes)){offset=state.offset_bytes;succeeded=true;}
     }
    }
