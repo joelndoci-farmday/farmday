@@ -30,19 +30,29 @@ def main():
     requested=os.environ.get("FARMDAY_UPLOAD_ID","").strip()
     sessions=rows("farmday_youtube_upload_sessions",{"select":"id,user_id,youtube_video_id,state","state":"eq.completed","order":"updated_at.desc","limit":"1000"})
     completed=0
+    stats={"sessions":len(sessions),"no_upload":0,"no_private_original":0,"already_analyzed":0,"failed":0,"eligible":0}
+    print("Worker preflight: completed upload sessions",len(sessions),"batch limit",BATCH_SIZE,flush=True)
     for session in sessions:
         if completed>=BATCH_SIZE:break
         uploads=rows("farmday_uploads",{"select":"id,user_id","storage_path":"eq.youtube-private/"+session["youtube_video_id"]})
-        if not uploads: continue
+        if not uploads:
+            stats["no_upload"]+=1
+            continue
         upload=uploads[0]
         if requested and upload["id"]!=requested:continue
         previews=rows("farmday_review_previews",{"select":"storage_path","session_id":"eq."+session["id"],"user_id":"eq."+session["user_id"],"limit":"1"})
-        if not previews: continue
+        if not previews:
+            stats["no_private_original"]+=1
+            print("Pending original registration for upload",upload["id"],"session",session["id"],flush=True)
+            continue
         existing=rows("farmday_media_analysis",{"select":"provider,video_analysis_status","upload_id":"eq."+upload["id"]})
-        if existing and existing[0].get("provider")==ENGINE and existing[0].get("video_analysis_status")=="analyzed" and not requested:continue
+        if existing and existing[0].get("provider")==ENGINE and existing[0].get("video_analysis_status")=="analyzed" and not requested:
+            stats["already_analyzed"]+=1
+            continue
         path=previews[0]["storage_path"]
         if not path.startswith(session["user_id"]+"/"+session["id"]+"/"):continue
-        print("Analyzing upload",upload["id"])
+        stats["eligible"]+=1
+        print("Analyzing upload",upload["id"],flush=True)
         try:
             signed=api("/storage/v1/object/sign/"+BUCKET+"/"+urllib.parse.quote(path,safe="/"),"POST",{"expiresIn":600})
             signed_url=signed.get("signedURL") or signed.get("signedUrl")
@@ -89,7 +99,11 @@ def main():
                 completed+=1
                 print("Analyzed",upload["id"],"frames",len(frames),"exact matches",len(matches),"A/V candidates")
         except Exception as error:
-            print("Analysis failed for",upload["id"],str(error)[:300],file=sys.stderr)
+            stats["failed"]+=1
+            print("Analysis failed for",upload["id"],str(error)[:300],file=sys.stderr,flush=True)
             update(upload["id"],{"provider":ENGINE,"video_analysis_status":"failed","copyright_analysis_status":"unverified","decision":"hold","decision_reason":"Technical media analysis failed; manual review required","findings":{"error_type":type(error).__name__}})
-    print("Completed",completed,"video(s), batch limit",BATCH_SIZE,". Pending originals will be retried on subsequent runs.")
+    print("FARMDAY_WORKER_SUMMARY",json.dumps({**stats,"analyzed":completed}),flush=True)
+    print("Completed",completed,"video(s), batch limit",BATCH_SIZE,". Pending originals will be retried on subsequent runs.",flush=True)
+    if stats["failed"]:
+        raise SystemExit("Media analysis failed for "+str(stats["failed"])+" upload(s); see logs")
 if __name__=="__main__":main()
