@@ -43,7 +43,7 @@ export async function savePrivateReviewCopy(file,userId,sessionId,onProgress=()=
    }
   }
  }
- const {error}=await supabase.from('farmday_review_previews').insert({session_id:sessionId,user_id:userId,storage_path:objectName});
+ const {error}=await supabase.rpc('farmday_register_private_review_original',{p_session_id:sessionId,p_storage_path:objectName});
  if(error)throw error;
  return objectName;
 }
