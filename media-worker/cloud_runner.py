@@ -4,6 +4,7 @@ import json, os, sys, tempfile, subprocess, urllib.request, urllib.parse
 from pathlib import Path
 from analyze import sha256, visual_hashes, audio_fp
 from similarity import ranked_matches
+from youtube_candidates import search as search_youtube
 
 BASE=os.environ.get("SUPABASE_URL","").rstrip("/")
 KEY=os.environ.get("SUPABASE_SERVICE_ROLE_KEY","")
@@ -15,7 +16,7 @@ def api(path, method="GET", payload=None):
     body=json.dumps(payload).encode() if payload is not None else None
     headers={"apikey":KEY,"Authorization":"Bearer "+KEY,"Accept":"application/json"}
     if body is not None: headers["Content-Type"]="application/json"
-    if method=="POST" and path.startswith("/rest/v1/farmday_media_analysis?"):\n        headers["Prefer"]="return=representation,resolution=merge-duplicates"\n    elif method in ("POST","PATCH"):\n        headers["Prefer"]="return=representation"
+    if method=="POST" and (path.startswith("/rest/v1/farmday_media_analysis?") or path.startswith("/rest/v1/farmday_youtube_similarity_checks?")):\n        headers["Prefer"]="return=representation,resolution=merge-duplicates"\n    elif method in ("POST","PATCH"):\n        headers["Prefer"]="return=representation"
     req=urllib.request.Request(url,data=body,headers=headers,method=method)
     try:
         with urllib.request.urlopen(req,timeout=90) as response:
@@ -126,6 +127,25 @@ def main():
                 api("/rest/v1/rpc/farmday_finish_media_job","POST",{"p_upload_id":upload_id,"p_success":False,"p_error":str(error)[:500]})
             except Exception as recording_error:
                 print("Could not persist job failure",str(recording_error)[:300],file=sys.stderr,flush=True)
+    # Independently search titles for completed uploads, including ones analyzed in earlier runs.
+    # Never modifies YouTube visibility or safety-review approvals.
+    try:
+        uploads=rows("farmday_uploads",{"select":"id,title","order":"created_at.desc","limit":"30"})
+        for item in uploads:
+            upload_id=item["id"]
+            old=rows("farmday_youtube_similarity_checks",{"select":"upload_id,engine_version","upload_id":"eq."+upload_id,"limit":"1"})
+            if old and old[0].get("engine_version")=="youtube-title-ranked-v1": continue
+            safety=rows("farmday_upload_safety",{"select":"youtube_video_id","upload_id":"eq."+upload_id,"limit":"1"})
+            result=search_youtube(item.get("title") or "",safety[0].get("youtube_video_id") if safety else None)
+            record={"upload_id":upload_id,"query_text":result.get("query_text") or item.get("title") or "",
+                "state":result["state"],"candidates":result["candidates"],"candidate_count":len(result["candidates"]),
+                "error_code":result.get("error_code"),"engine_version":"youtube-title-ranked-v1" if result["state"] not in ("not_configured","search_error") else "youtube-title-pending-v1",
+                "checked_at":"now()"}
+            record.pop("checked_at")
+            api("/rest/v1/farmday_youtube_similarity_checks?on_conflict=upload_id","POST",record)
+            print("YOUTUBE_TITLE_CANDIDATES",upload_id,result["state"],len(result["candidates"]),flush=True)
+    except Exception as e:
+        print("WARNING: YouTube candidate search:",str(e)[:300],file=sys.stderr,flush=True)
     print("FARMDAY_WORKER_SUMMARY",json.dumps(stats),flush=True)
     if stats["failed"]:raise SystemExit("Some media analyses failed; queued for retry where attempts remain")
 if __name__=="__main__":main()
