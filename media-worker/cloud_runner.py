@@ -24,6 +24,14 @@ def rows(table,params):
     return api("/rest/v1/"+table+"?"+urllib.parse.urlencode(params,safe=".,()*"))
 def update(upload_id,record):
     return api("/rest/v1/farmday_media_analysis?upload_id=eq."+upload_id,"POST",{"upload_id":upload_id,**record})
+def delete_staged_original(path):
+    # Only the already-validated owner/session path may be removed.
+    url=BASE+"/storage/v1/object/"+BUCKET+"/"+urllib.parse.quote(path,safe="/")
+    req=urllib.request.Request(url,headers={"apikey":KEY,"Authorization":"Bearer "+KEY},method="DELETE")
+    with urllib.request.urlopen(req,timeout=90) as response:
+        response.read()
+    print("Deleted temporary review original",flush=True)
+
 def main():
     if not BASE.startswith("https://") or not KEY:
         raise SystemExit("Configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY as GitHub Actions secrets")
@@ -50,6 +58,7 @@ def main():
             existing=rows("farmday_media_analysis",{"select":"provider,video_analysis_status,audio_analysis_status","upload_id":"eq."+upload_id})
             if existing and existing[0].get("provider")==ENGINE and existing[0].get("video_analysis_status")=="analyzed" and existing[0].get("audio_analysis_status")=="analyzed":
                 api("/rest/v1/rpc/farmday_finish_media_job","POST",{"p_upload_id":upload_id,"p_success":True})
+                delete_staged_original(path)
                 stats["analyzed"]+=1
                 print("Already analyzed",upload_id,flush=True)
                 continue
@@ -99,6 +108,10 @@ def main():
                 if not frames or audio["status"]!="analyzed":
                     raise RuntimeError("Video/audio analysis incomplete: frames="+str(len(frames))+" audio="+audio["status"])
                 api("/rest/v1/rpc/farmday_finish_media_job","POST",{"p_upload_id":upload_id,"p_success":True})
+                try:
+                    delete_staged_original(path)
+                except Exception as cleanup_error:
+                    print("WARNING: Temporary media cleanup failed:",str(cleanup_error)[:200],file=sys.stderr,flush=True)
                 stats["analyzed"]+=1
                 print("Analyzed",upload_id,"frames",len(frames),"audio samples",len(audio_raw),"matches",len(matches),flush=True)
         except Exception as error:
