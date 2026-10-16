@@ -32,4 +32,5 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.FARMDAY_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FARMDAY_SUPABASE_SERVICE_ROLE_KEY }}
+          FARMDAY_YOUTUBE_API_KEY: ${{ secrets.FARMDAY_YOUTUBE_API_KEY }}
         run: python3 media-worker/cloud_runner.py
