@@ -10,7 +10,7 @@ def score(a,b):
 def search(title,own_id=None):
     key=os.environ.get("FARMDAY_YOUTUBE_API_KEY","").strip()
     if not key: return {"state":"not_configured","candidates":[],"error_code":"missing_youtube_api_key"}
-    query=" ".join(list(tokens(title))[:8]) or title
+    query=" ".join(sorted(tokens(title))[:8]) or title
     params=urllib.parse.urlencode({"part":"snippet","type":"video","maxResults":25,"q":query,"key":key})
     req=urllib.request.Request("https://www.googleapis.com/youtube/v3/search?"+params)
     try:
