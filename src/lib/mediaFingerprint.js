@@ -30,5 +30,34 @@ export async function analyzeOriginalFile(file, onProgress=()=>{}) {
     visual=JSON.stringify({algorithm:'sampled-dhash-9x8-v1',duration_seconds:Math.round(duration),samples:hashes});
   }catch{ /* Some formats are not browser-decodable; exact-file hash still useful. */ }
   finally {video.pause();video.removeAttribute('src');video.load();URL.revokeObjectURL(url)}
-  return {sha256,visual,note:visual?'Browser visual samples ready; untrusted and not rights proof.':'Visual sampling unavailable for this codec.'};
+  // Browser-only audio analysis; no video bytes are persisted to Supabase.
+  // This is a coarse acoustic signature, NOT a Chromaprint or Content ID match.
+  let audio=null;
+  if(file.size<=48*1024*1024){
+    let context;
+    try{
+      onProgress('Sampling audio spectrum locally…');
+      const AudioContextType=window.AudioContext||window.webkitAudioContext;
+      if(!AudioContextType)throw Error('Web Audio API unavailable');
+      context=new AudioContextType();
+      const decoded=await context.decodeAudioData(await file.arrayBuffer());
+      const samples=[];
+      const channel=decoded.getChannelData(0), rate=decoded.sampleRate;
+      const windowSize=2048, seconds=Math.min(90,decoded.duration);
+      for(let second=0;second<seconds;second+=3){
+        const start=Math.floor(second*rate);
+        if(start+windowSize>channel.length)break;
+        let energy=0, crossings=0, prev=channel[start];
+        for(let k=0;k<windowSize;k++){
+          const v=channel[start+k];energy+=v*v;
+          if((v>=0)!==(prev>=0))crossings++;
+          prev=v;
+        }
+        samples.push([Math.round(Math.sqrt(energy/windowSize)*10000),crossings]);
+      }
+      if(samples.length)audio=JSON.stringify({algorithm:'browser-rms-zcr-3sec-v1',duration_seconds:Math.round(decoded.duration),samples});
+    }catch{ /* Unsupported codecs stay unverified, not passed. */ }
+    finally{if(context)await context.close().catch(()=>{});}
+  }
+  return {sha256,visual,audio,note:visual?'Browser visual samples ready; untrusted and not rights proof.':'Visual sampling unavailable for this codec.'};
 }
