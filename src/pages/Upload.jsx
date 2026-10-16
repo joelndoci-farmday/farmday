@@ -5,7 +5,6 @@ import {supabase} from '../lib/supabase';
 import {useAuth} from '../context/AuthContext';
 import {TERMS_VERSION} from '../lib/uploadTerms';
 import {analyzeOriginalFile} from '../lib/mediaFingerprint';
-import {savePrivateReviewCopy} from '../lib/privateReviewUpload';
 const MAX=1024*1024*1024;
 const CHUNK=2*1024*1024;
 export default function UploadPage(){
@@ -22,25 +21,16 @@ export default function UploadPage(){
  try{
   let signals=null;
   try{signals=await analyzeOriginalFile(file,setAnalysisMessage)}catch(err){setAnalysisMessage('Preliminary fingerprint unavailable: '+err.message)}
-  const requestAnalysis=async()=>{try{const {data}=await supabase.functions.invoke('farmday-media-kick',{body:{session_id:startSessionId}});if(data?.immediate)setAnalysisMessage('Server video/audio analysis requested immediately.');else setAnalysisMessage('Server analysis queued; automatic worker checks pending jobs every 5 minutes.')}catch{setAnalysisMessage('Upload complete; server analysis will be retried by the scheduled worker.')}};
+  const requestAnalysis=async()=>{try{const {data}=await supabase.functions.invoke('farmday-media-kick',{body:{session_id:startSessionId}});if(data?.immediate)setAnalysisMessage('Server analysis requested.');else setAnalysisMessage('Server analysis is unavailable without a temporary transfer endpoint; manual review required.')}catch{setAnalysisMessage('Upload complete; server analysis will be retried by the scheduled worker.')}};
   let startSessionId='';
   const saveSignals=async(uploadId)=>{if(!signals?.sha256||!uploadId)return;const {error}=await supabase.rpc('farmday_submit_client_fingerprints',{p_upload_id:uploadId,p_sha256:signals.sha256,p_visual:signals.visual||'',p_audio:''});setAnalysisMessage(error?'Fingerprint storage pending: '+error.message:'Preliminary fingerprint recorded. Rights and monetization remain unverified.')};
   const {data:start,error:startError}=await supabase.functions.invoke('farmday-youtube-upload',{body:{action:'start',title:title.trim(),description:description.trim(),mime_type:file.type,total_bytes:file.size,terms_version:TERMS_VERSION}});
   if(startError||!start?.session_id)throw new Error(start?.error||startError?.message||'Could not start video upload.');
   startSessionId=start.session_id;
-  // Attempt a private original for every supported upload, not just videos <=40 MB.
-  // Storage quotas may still reject large files; never mark such files analyzed.
-  {
-   try{
-    setAnalysisMessage('Saving private original for cloud video/audio analysis…');
-    await savePrivateReviewCopy(file,user.id,start.session_id);
-    setAnalysisMessage('Private original saved; cloud analysis pending.');
-   }catch(err){
-    // Do not silently finish a YouTube upload that cannot enter server analysis.
-    // Keep the session pending and show the real Storage/TUS error to the uploader.
-    throw new Error('Private analysis upload failed: '+(err?.message||'unknown storage error')+'. The YouTube transfer was not started. Please retry or contact Farmday support.');
-   }
-  }
+  // The video is delivered to YouTube only. No persistent private video copy.
+  // Browser fingerprints are preliminary; server FFmpeg/Chromaprint cannot run
+  // without a separately configured ephemeral transfer endpoint.
+  setAnalysisMessage('No Supabase video copy. Full server audio/video analysis unavailable until an ephemeral transfer endpoint is configured.');
   const {data:{session}}=await supabase.auth.getSession();
   if(!session?.access_token)throw new Error('Please sign in again.');
   let offset=0;
