@@ -17,13 +17,17 @@ def api(path, method="GET", payload=None):
     if body is not None: headers["Content-Type"]="application/json"
     if method=="POST" and path.startswith("/rest/v1/farmday_media_analysis?"):\n        headers["Prefer"]="return=representation,resolution=merge-duplicates"\n    elif method in ("POST","PATCH"):\n        headers["Prefer"]="return=representation"
     req=urllib.request.Request(url,data=body,headers=headers,method=method)
-    with urllib.request.urlopen(req,timeout=90) as response:
-        data=response.read()
+    try:
+        with urllib.request.urlopen(req,timeout=90) as response:
+            data=response.read()
+    except urllib.error.HTTPError as error:
+        detail=error.read(1000).decode('utf-8','replace')
+        raise RuntimeError('Supabase '+method+' '+path.split('?')[0]+' returned HTTP '+str(error.code)+': '+detail[:500]) from error
     return json.loads(data) if data else None
 def rows(table,params):
     return api("/rest/v1/"+table+"?"+urllib.parse.urlencode(params,safe=".,()*"))
 def update(upload_id,record):
-    return api("/rest/v1/farmday_media_analysis?upload_id=eq."+upload_id,"POST",{"upload_id":upload_id,**record})
+    return api("/rest/v1/farmday_media_analysis?on_conflict=upload_id","POST",{"upload_id":upload_id,**record})
 def delete_staged_original(path):
     # Only the already-validated owner/session path may be removed.
     url=BASE+"/storage/v1/object/"+BUCKET+"/"+urllib.parse.quote(path,safe="/")
