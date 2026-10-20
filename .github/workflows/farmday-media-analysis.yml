@@ -1,6 +1,5 @@
 name: FarmDay media analysis on upload
 on:
-  workflow_dispatch:
   repository_dispatch:
     types: [farmday_media_ready]
 permissions:
@@ -24,37 +23,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Check pending queue before installing engines
-        id: queue
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          python - <<'PY'
-          import os, urllib.request, json
-          pending = True
-          if os.environ.get("EVENT_NAME") == "schedule":
-              url = os.environ["SUPABASE_URL"].rstrip("/") + "/rest/v1/farmday_media_jobs?state=eq.queued&select=upload_id&limit=1"
-              req = urllib.request.Request(url, headers={"apikey": os.environ["SUPABASE_SERVICE_ROLE_KEY"], "Authorization": "Bearer " + os.environ["SUPABASE_SERVICE_ROLE_KEY"]})
-              with urllib.request.urlopen(req, timeout=20) as res:
-                  pending = bool(json.load(res))
-          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write("pending=" + str(pending).lower() + "\n")
-          print("Pending analysis:", pending)
-          PY
-      - name: Install video and audio engines
-        if: steps.queue.outputs.pending == 'true'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg libchromaprint-tools
-          python -m pip install --disable-pip-version-check faster-whisper==1.2.1
-      - name: Check required secrets
+      - name: Verify worker configuration
         run: |
           test -n "$SUPABASE_URL" || { echo "::error::Missing FARMDAY_SUPABASE_URL"; exit 1; }
           test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo "::error::Missing FARMDAY_SUPABASE_SERVICE_ROLE_KEY"; exit 1; }
           test -n "$FARMDAY_YOUTUBE_API_KEY" || { echo "::error::Missing FARMDAY_YOUTUBE_API_KEY"; exit 1; }
       - name: Run unit tests
-        if: steps.queue.outputs.pending == 'true'
         run: python -m unittest discover -s media-worker -p 'test_*.py' -v
+      - name: Install video and audio engines
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg libchromaprint-tools
+          python -m pip install --disable-pip-version-check faster-whisper==1.2.1
       - name: Drain pending media queue
-        if: steps.queue.outputs.pending == 'true'
         run: python media-worker/drain_queue.py

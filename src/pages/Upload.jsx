@@ -10,7 +10,8 @@ const MAX=1024*1024*1024;
 const CHUNK=2*1024*1024;
 export default function UploadPage(){
  const {user}=useAuth(),navigate=useNavigate();
- const [analysisMessage,setAnalysisMessage]=useState('');const [progress,setProgress]=useState(0);const [open,setOpen]=useState(true),[stage,setStage]=useState('details'),[file,setFile]=useState(null),[title,setTitle]=useState(''),[description,setDescription]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
+ const [analysisMessage,setAnalysisMessage]=useState('');const [dispatchFailed,setDispatchFailed]=useState(false);const [completedSessionId,setCompletedSessionId]=useState('');const [progress,setProgress]=useState(0);const [open,setOpen]=useState(true),[stage,setStage]=useState('details'),[file,setFile]=useState(null),[title,setTitle]=useState(''),[description,setDescription]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
+ async function requestDispatchRetry(sessionId){try{const {data,error}=await supabase.functions.invoke('farmday-media-kick',{body:{session_id:sessionId}});if(error||data?.error||!data?.immediate)throw new Error(data?.reason||data?.error||error?.message||'Dispatch not accepted');setDispatchFailed(false);setAnalysisMessage('Cloud analysis requested. Results will appear in Admin after processing.');}catch(err){setDispatchFailed(true);setAnalysisMessage('Cloud analysis is still queued: '+(err.message||'Dispatch failed'));}}
  function close(){if(busy)return;setOpen(false);navigate('/');}
  async function submit(e){
  e.preventDefault();setMessage('');
@@ -22,19 +23,19 @@ export default function UploadPage(){
  try{
   let signals=null;
   try{signals=await analyzeOriginalFile(file,setAnalysisMessage)}catch(err){setAnalysisMessage('Preliminary fingerprint unavailable: '+err.message)}
-  const requestAnalysis=async()=>{
+  const requestAnalysis=async(sessionId=startSessionId)=>{
     try{
-      const {data,error}=await supabase.functions.invoke('farmday-media-kick',{body:{session_id:startSessionId}});
+      const {data,error}=await supabase.functions.invoke('farmday-media-kick',{body:{session_id:sessionId}});
       if(error||data?.error)throw new Error(data?.error||error.message);
-      if(data?.immediate)setAnalysisMessage('Cloud analysis requested. Results will appear in Admin after processing.');
-      else setAnalysisMessage('Video queued, but cloud dispatch is not configured or failed: '+(data?.reason||'Check cloud configuration.'));
-    }catch(err){setAnalysisMessage('Video uploaded, but cloud analysis was NOT started: '+(err.message||'Unknown error'));}
+      if(data?.immediate){setDispatchFailed(false);setAnalysisMessage('Cloud analysis requested. Results will appear in Admin after processing.');}
+      else {setDispatchFailed(true);setAnalysisMessage('Video queued, but cloud dispatch was not accepted: '+(data?.reason||'Check cloud configuration.'));}
+    }catch(err){setDispatchFailed(true);setAnalysisMessage('Video uploaded, but cloud analysis was NOT started: '+(err.message||'Unknown error'));}
   };
   let startSessionId='';
   const saveSignals=async(uploadId)=>{if(!signals?.sha256||!uploadId)return;const {error}=await supabase.rpc('farmday_submit_client_fingerprints',{p_upload_id:uploadId,p_sha256:signals.sha256,p_visual:signals.visual||'',p_audio:signals.audio||''});setAnalysisMessage(error?'Fingerprint storage pending: '+error.message:'Preliminary fingerprint recorded. Rights and monetization remain unverified.')};
   const {data:start,error:startError}=await supabase.functions.invoke('farmday-youtube-upload',{body:{action:'start',title:title.trim(),description:description.trim(),mime_type:file.type,total_bytes:file.size,terms_version:TERMS_VERSION}});
   if(startError||!start?.session_id)throw new Error(start?.error||startError?.message||'Could not start video upload.');
-  startSessionId=start.session_id;
+  startSessionId=start.session_id;setCompletedSessionId(start.session_id);
   // Temporary private original: retain until an explicitly verified cleanup phase.
   // Never send the video to YouTube if the required review copy failed.
   await savePrivateReviewCopy(file,user.id,start.session_id);
@@ -67,7 +68,7 @@ export default function UploadPage(){
  finally{setBusy(false);}
  }
  return <main className="wrap section"><div className="upload-landing"><h1>Upload Video</h1><p className="muted">Share your farming story with the Farmday community.</p></div>{open&&<div className="upload-overlay" role="presentation"><section className="upload-dialog" role="dialog" aria-modal="true" aria-label="Upload video"><button className="upload-close" type="button" onClick={close} disabled={busy} aria-label="Close"><X size={20}/></button>
- {stage==='done'?<div className="upload-result"><UploadCloud size={42}/><h2>Video submitted successfully!</h2><p>Your video is being reviewed by Farmday. Review may take up to 24 hours, but this is an estimate, not a guarantee. You can leave this page now.</p><button className="btn primary" onClick={close}>Done</button></div>:
+ {stage==='done'?<div className="upload-result"><UploadCloud size={42}/><h2>Video submitted successfully!</h2><p>Your video is being reviewed by Farmday. Review may take up to 24 hours, but this is an estimate, not a guarantee. You can leave this page now.</p>{analysisMessage&&<p role={dispatchFailed?'alert':'status'} className="muted fine">{analysisMessage}</p>}{dispatchFailed&&completedSessionId&&<button className="btn" type="button" onClick={()=>requestDispatchRetry(completedSessionId)}>Retry cloud analysis request</button>}<button className="btn primary" onClick={close}>Done</button></div>:
  stage==='uploading'?<div className="upload-result"><UploadCloud size={42}/><h2>Uploading your video… {progress}%</h2><progress max="100" value={progress} style={{width:'100%'}}/><p>Please keep this page open until the upload is complete. Do not close the browser yet.</p></div>:
  <form className="form" onSubmit={submit}><h2>Choose your video</h2><label className="file-select"><UploadCloud size={25}/><span>{file?file.name:'Choose video from your phone gallery or computer folder'}</span><input type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v,video/*" required onChange={e=>setFile(e.target.files?.[0]||null)}/></label><p className="muted fine">MP4, MOV, WebM or M4V · Maximum 1 GB</p><label>Video title<input required minLength={5} maxLength={180} value={title} onChange={e=>setTitle(e.target.value)}/></label><label>Description (optional)<textarea maxLength={2000} rows={3} value={description} onChange={e=>setDescription(e.target.value)}/></label><div className="rowactions"><button className="btn primary" type="submit" disabled={busy||!file}>Upload</button></div><p className="muted fine">Share your farming story with the world.</p></form>}
  {message&&<p role="alert" className="notice">{message}</p>}</section></div>}</main>
