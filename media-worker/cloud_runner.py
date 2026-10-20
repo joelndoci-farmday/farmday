@@ -8,7 +8,7 @@ from similarity import ranked_matches
 from youtube_candidates import search as search_youtube
 from intelligence import scenes, speech, search_phrases, review_priority
 from external_references import compare as compare_external_references
-from music_screening import music_signals
+
 
 BASE=os.environ.get("SUPABASE_URL","").rstrip("/")
 KEY=os.environ.get("SUPABASE_SERVICE_ROLE_KEY","")
@@ -135,7 +135,7 @@ def main():
                     continue
                 scene_data=scenes(dest)
                 transcript=speech(dest)
-                music_evidence=music_signals(dest, audio_raw)
+                music_evidence={"status":"fingerprinted" if audio_raw else "unavailable","chromaprint_samples":len(audio_raw),"song_identified":False,"rights_verified":False,"note":"Local fingerprint available for reference comparisons; no global song catalog."}
                 findings={
                     "similar_media":matches,
                     "external_reference_matches":external_matches,
