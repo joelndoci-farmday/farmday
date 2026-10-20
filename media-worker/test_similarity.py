@@ -1,8 +1,24 @@
 import unittest
 from similarity import audio_match,visual_match,ranked_matches
 import json
+from unittest.mock import patch
+from analyze import media_metadata
 
 class SimilarityTests(unittest.TestCase):
+    def test_metadata_probe(self):
+        fixture={'format':{'format_name':'mov,mp4','duration':'12.50','bit_rate':'800000'},
+                 'streams':[{'codec_type':'video','codec_name':'h264','width':1280,'height':720,'avg_frame_rate':'30000/1001'},
+                            {'codec_type':'audio','codec_name':'aac','channels':2,'sample_rate':'48000'}]}
+        with patch('analyze.cmd',return_value=json.dumps(fixture)):
+            result=media_metadata('example.mp4')
+        self.assertEqual(result['duration_seconds'],12.5)
+        self.assertEqual(result['video']['fps'],29.97)
+        self.assertEqual(result['audio']['sample_rate_hz'],48000)
+    def test_video_without_audio(self):
+        with patch('analyze.cmd',return_value=json.dumps({'format':{},'streams':[{'codec_type':'video','avg_frame_rate':'0/0'}]})):
+            result=media_metadata('silent.mp4')
+        self.assertFalse(result['audio']['present'])
+        self.assertIsNone(result['video']['fps'])
     def test_identical_visual(self):
         x=['0000000000000000','ffffffffffffffff']
         self.assertEqual(visual_match(x,x),1.0)
