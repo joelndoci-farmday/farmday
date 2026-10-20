@@ -55,3 +55,14 @@ def review_priority(matches, youtube, transcript, scene_data):
     if transcript.get("status")!="analyzed" or scene_data.get("status")=="unavailable":
         return {"level":"unknown","reason":"Some analysis signals unavailable; manual review required","basis":"incomplete_evidence"}
     return {"level":"normal","reason":"No strong signals in accessible comparison sources; copyright remains unverified","basis":"limited_screening"}
+
+def ten_frame_evidence(path, duration_seconds=None):
+    """Select ten spread-out frame positions. This is sampling, not AI recognition."""
+    try:
+        duration=float(duration_seconds or 0)
+        if duration<=0:
+            return {"status":"unavailable","reason":"unknown_duration","timestamps":[]}
+        stamps=[round(duration*(i+0.5)/10,2) for i in range(10)]
+        return {"status":"sampled","timestamps":stamps,"count":len(stamps),"interpretation":"Frames are sampled for visual fingerprints; no external video content recognition is implied"}
+    except (TypeError,ValueError,OverflowError):
+        return {"status":"unavailable","reason":"invalid_duration","timestamps":[]}
