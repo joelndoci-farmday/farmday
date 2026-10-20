@@ -142,7 +142,7 @@ def main():
                     "technical_metadata":metadata,
                     "ranking_weights":{"visual":0.60,"audio":0.35,"exact_file":0.05,"title":0.0},
                     "audio_fingerprint_available":audio.get("status")=="analyzed",
-                    "comparison_scope":"Technical fingerprints of uploaded original; not compared to YouTube video bytes",
+                    "comparison_scope":"Uploaded original compared against Farmday fingerprints and explicitly registered external reference fingerprints; no general YouTube audiovisual access",
                     "youtube_search_scope":"YouTube public metadata candidates; NOT audiovisual matches",
                     "limitations":"No global Content ID access. Media matching is not copyright or monetization clearance."
                 }
@@ -170,6 +170,8 @@ def main():
                 findings["review_priority"]=review_priority(matches,yt,transcript,scene_data)
                 if external_matches:
                     findings["review_priority"]={"level":"high","basis":"user_supplied_external_fingerprint","reason":"Strong A/V match with registered external reference; verify provenance and rights"}
+                    api("/rest/v1/farmday_upload_safety?upload_id=eq."+upload_id,"PATCH",
+                        {"screening_state":"needs_evidence","auto_review_ready":False})
                 update(upload_id,{"findings":findings})
                 api("/rest/v1/farmday_youtube_similarity_checks?on_conflict=upload_id","POST",{
                     "upload_id":upload_id,"query_text":yt.get("query_text") or u.get("title") or "",
