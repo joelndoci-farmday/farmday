@@ -38,7 +38,7 @@ def search_phrases(transcript, limit=2):
     phrases=[]
     for segment in transcript.get("segments",[]):
         t=segment.get("text","").strip()
-        words=re.findall(r"[^\\W_]+",t,flags=re.UNICODE)
+        words=re.findall(r"[^\W_]+",t,flags=re.UNICODE)
         if 5<=len(words)<=18 and len(t)>=30:
             phrases.append(t[:110])
         if len(phrases)>=limit:break
