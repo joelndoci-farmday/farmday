@@ -17,8 +17,14 @@ def seconds(duration):
 def search(title,own_id=None,description="",duration_seconds=None):
     key=os.environ.get("FARMDAY_YOUTUBE_API_KEY","").strip()
     if not key:return {"state":"not_configured","candidates":[],"error_code":"missing_youtube_api_key"}
-    phrases=[title.strip()," ".join(sorted(tokens(description))[:7])]
-    phrases=list(dict.fromkeys(x for x in phrases if x))[:3]
+    words=re.findall(r"[^\W_]+",description or "",flags=re.UNICODE)
+    long_words=[w for w in words if len(w)>=5 and w.casefold() not in STOP]
+    phrases=[title.strip()]
+    if len(long_words)>=4:
+        phrases.extend([" ".join(long_words[:9])," ".join(long_words[-9:])])
+    elif long_words:
+        phrases.append(" ".join(long_words))
+    phrases=list(dict.fromkeys(x.strip() for x in phrases if x.strip()))[:4]
     if not phrases:return {"state":"insufficient_metadata","candidates":[],"error_code":"no_search_terms"}
     found={}; errors=[]
     for phrase in phrases:
