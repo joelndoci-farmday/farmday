@@ -16,6 +16,30 @@ def sha256(path):
         for chunk in iter(lambda:f.read(1024*1024),b''):h.update(chunk)
     return h.hexdigest()
 
+def media_metadata(path):
+    """Report measurable stream properties; never infer copyright or quality approval."""
+    raw=json.loads(cmd(['ffprobe','-v','error','-show_format','-show_streams','-of','json',str(path)]))
+    streams=raw.get('streams',[])
+    video=next((s for s in streams if s.get('codec_type')=='video'),None)
+    audio=next((s for s in streams if s.get('codec_type')=='audio'),None)
+    fmt=raw.get('format',{})
+    def number(v):
+        try:return round(float(v),3)
+        except (TypeError,ValueError,OverflowError):return None
+    def fps(v):
+        try:
+            n,d=map(int,str(v).split('/'))
+            return round(n/d,3) if d else None
+        except (ValueError,TypeError):return None
+    return {'container':fmt.get('format_name'),'duration_seconds':number(fmt.get('duration')),
+            'bitrate_bps':int(fmt['bit_rate']) if str(fmt.get('bit_rate','')).isdigit() else None,
+            'video':{'present':bool(video),'codec':video.get('codec_name') if video else None,
+                     'width':video.get('width') if video else None,'height':video.get('height') if video else None,
+                     'fps':fps(video.get('avg_frame_rate')) if video else None},
+            'audio':{'present':bool(audio),'codec':audio.get('codec_name') if audio else None,
+                     'channels':audio.get('channels') if audio else None,
+                     'sample_rate_hz':int(audio['sample_rate']) if audio and str(audio.get('sample_rate','')).isdigit() else None}}
+
 def visual_hashes(path):
     # Perceptual 8x8 grayscale frame hash, sampled once per 5 seconds.
     with tempfile.TemporaryDirectory() as d:
