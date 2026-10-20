@@ -2,7 +2,7 @@
 """Private FarmDay video analysis. Never infers copyright clearance or YPP approval."""
 import json, os, sys, tempfile, subprocess, urllib.request, urllib.parse
 from pathlib import Path
-from analyze import sha256, visual_hashes, audio_fp
+from analyze import sha256, visual_hashes, audio_fp, media_metadata
 from similarity import ranked_matches
 from youtube_candidates import search as search_youtube
 
@@ -86,6 +86,7 @@ def main():
                         if size>1024*1024*1024:raise RuntimeError("File exceeds 1 GiB")
                         target.write(block)
                 if not size:raise RuntimeError("Empty original file")
+                metadata=media_metadata(dest)
                 digest=sha256(dest)
                 frames=visual_hashes(dest)
                 audio=audio_fp(dest)
@@ -94,6 +95,7 @@ def main():
                 matches=ranked_matches(frames,audio_raw,others,digest,upload_id)
                 findings={
                     "similar_media":matches,
+                    "technical_metadata":metadata,
                     "ranking_weights":{"visual":0.60,"audio":0.35,"exact_file":0.05,"title":0.0},
                     "audio_fingerprint_available":audio.get("status")=="analyzed",
                     "comparison_scope":"FarmDay previously analyzed videos only",
