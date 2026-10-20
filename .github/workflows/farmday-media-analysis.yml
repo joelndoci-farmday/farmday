@@ -46,6 +46,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg libchromaprint-tools
+          python -m pip install --disable-pip-version-check faster-whisper==1.2.1
       - name: Check required secrets
         run: |
           test -n "$SUPABASE_URL" || { echo "::error::Missing FARMDAY_SUPABASE_URL"; exit 1; }
