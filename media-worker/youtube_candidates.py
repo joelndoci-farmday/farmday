@@ -17,7 +17,7 @@ def seconds(duration):
 def search(title,own_id=None,description="",duration_seconds=None):
     key=os.environ.get("FARMDAY_YOUTUBE_API_KEY","").strip()
     if not key:return {"state":"not_configured","candidates":[],"error_code":"missing_youtube_api_key"}
-    phrases=[title.strip()," ".join(sorted(tokens(title))[:7])," ".join(sorted(tokens(description))[:6])]
+    phrases=[title.strip()," ".join(sorted(tokens(description))[:7])]
     phrases=list(dict.fromkeys(x for x in phrases if x))[:3]
     if not phrases:return {"state":"insufficient_metadata","candidates":[],"error_code":"no_search_terms"}
     found={}; errors=[]
@@ -46,9 +46,9 @@ def search(title,own_id=None,description="",duration_seconds=None):
         title_score=score(title,c["title"]);desc_score=score(description,c["description"]) if description else 0
         cd=c.get("duration_seconds")
         duration_score=round(max(0,1-abs(cd-duration_seconds)/max(cd,duration_seconds,1)),3) if cd is not None and duration_seconds else None
-        ranking=round(.75*title_score+.15*desc_score+(.10*duration_score if duration_score is not None else 0),3)
-        if title_score<.10 and desc_score<.12:continue
-        c.update({"title_similarity":title_score,"description_similarity":desc_score,"duration_similarity":duration_score,"metadata_rank":ranking,"match_type":"youtube_metadata_candidate_unverified"})
+        ranking=round(.55*title_score+.15*desc_score+(.30*duration_score if duration_score is not None else 0),3)
+        if title_score<.10 and desc_score<.12 and (duration_score is None or duration_score<.985):continue
+        c.update({"title_similarity":title_score,"description_similarity":desc_score,"duration_similarity":duration_score,"metadata_rank":ranking,"match_type":"youtube_metadata_candidate_unverified","duration_delta_seconds":round(abs(cd-duration_seconds),2) if cd is not None and duration_seconds is not None else None})
         candidates.append(c)
     candidates.sort(key=lambda x:x["metadata_rank"],reverse=True)
     return {"state":"search_partial" if errors else ("candidates_found_not_verified" if candidates else "no_metadata_candidates"),"candidates":candidates[:20],"error_code":",".join(sorted(set(errors))) or None,"query_text":" | ".join(phrases)}
