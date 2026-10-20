@@ -3,8 +3,6 @@ on:
   workflow_dispatch:
   repository_dispatch:
     types: [farmday_media_ready]
-  schedule:
-    - cron: '*/15 * * * *'
 permissions:
   contents: read
 concurrency:
