@@ -7,6 +7,7 @@ from analyze import sha256, visual_hashes, audio_fp, media_metadata
 from similarity import ranked_matches
 from youtube_candidates import search as search_youtube
 from intelligence import scenes, speech, search_phrases, review_priority
+from external_references import compare as compare_external_references
 
 BASE=os.environ.get("SUPABASE_URL","").rstrip("/")
 KEY=os.environ.get("SUPABASE_SERVICE_ROLE_KEY","")
@@ -112,6 +113,7 @@ def main():
                 others=rows("farmday_media_analysis",{"select":"upload_id,video_sha256,visual_fingerprint,audio_fingerprint","video_analysis_status":"eq.analyzed","limit":"500"})
                 audio_raw=audio.get("fingerprint") if isinstance(audio.get("fingerprint"),list) else []
                 matches=ranked_matches(frames,audio_raw,others,digest,upload_id)
+                external_matches=compare_external_references(frames,audio_raw)
                 # Exact local copies require human review, not a second costly YouTube search.
                 exact=next((m for m in matches if m.get("exact_file")),None)
                 if exact:
@@ -134,6 +136,7 @@ def main():
                 transcript=speech(dest)
                 findings={
                     "similar_media":matches,
+                    "external_reference_matches":external_matches,
                     "scene_analysis":scene_data,
                     "speech_transcript":transcript,
                     "technical_metadata":metadata,
@@ -149,7 +152,7 @@ def main():
                     "audio_fingerprint":json.dumps(audio_raw),
                     "video_analysis_status":"analyzed" if frames else "no_frames",
                     "audio_analysis_status":audio["status"],
-                    "duplicate_analysis_status":"possible_match" if matches else "no_match_in_local_library",
+                    "duplicate_analysis_status":"possible_match" if (matches or external_matches) else "no_match_in_local_library",
                     "copyright_analysis_status":"requires_rights_evidence",
                     "findings":findings,
                     "evidence":{"source":"private original upload","bytes":size,"engine":ENGINE},
@@ -165,6 +168,8 @@ def main():
                 spoken=" ".join(search_phrases(transcript))
                 yt=search_youtube(u.get("title") or "",safety_rows[0].get("youtube_video_id") if safety_rows else None,(u.get("description") or "")+" "+spoken,metadata.get("duration_seconds"))
                 findings["review_priority"]=review_priority(matches,yt,transcript,scene_data)
+                if external_matches:
+                    findings["review_priority"]={"level":"high","basis":"user_supplied_external_fingerprint","reason":"Strong A/V match with registered external reference; verify provenance and rights"}
                 update(upload_id,{"findings":findings})
                 api("/rest/v1/farmday_youtube_similarity_checks?on_conflict=upload_id","POST",{
                     "upload_id":upload_id,"query_text":yt.get("query_text") or u.get("title") or "",
