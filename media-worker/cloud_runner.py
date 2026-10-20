@@ -6,11 +6,12 @@ from pathlib import Path
 from analyze import sha256, visual_hashes, audio_fp, media_metadata
 from similarity import ranked_matches
 from youtube_candidates import search as search_youtube
+from intelligence import scenes, speech, search_phrases, review_priority
 
 BASE=os.environ.get("SUPABASE_URL","").rstrip("/")
 KEY=os.environ.get("SUPABASE_SERVICE_ROLE_KEY","")
 BUCKET="farmday-admin-review"
-ENGINE="farmday-cloud-unified-v2"
+ENGINE="farmday-cloud-intelligence-v3"
 BATCH_SIZE=max(1,min(int(os.environ.get("FARMDAY_BATCH_SIZE","5")),20))
 def api(path, method="GET", payload=None):
     url=BASE+path
@@ -111,8 +112,12 @@ def main():
                 others=rows("farmday_media_analysis",{"select":"upload_id,video_sha256,visual_fingerprint,audio_fingerprint","video_analysis_status":"eq.analyzed","limit":"500"})
                 audio_raw=audio.get("fingerprint") if isinstance(audio.get("fingerprint"),list) else []
                 matches=ranked_matches(frames,audio_raw,others,digest,upload_id)
+                scene_data=scenes(dest)
+                transcript=speech(dest)
                 findings={
                     "similar_media":matches,
+                    "scene_analysis":scene_data,
+                    "speech_transcript":transcript,
                     "technical_metadata":metadata,
                     "ranking_weights":{"visual":0.60,"audio":0.35,"exact_file":0.05,"title":0.0},
                     "audio_fingerprint_available":audio.get("status")=="analyzed",
@@ -139,7 +144,10 @@ def main():
                 upload_rows=rows("farmday_uploads",{"select":"title,description","id":"eq."+upload_id,"limit":"1"})
                 safety_rows=rows("farmday_upload_safety",{"select":"youtube_video_id","upload_id":"eq."+upload_id,"limit":"1"})
                 u=upload_rows[0] if upload_rows else {}
-                yt=search_youtube(u.get("title") or "",safety_rows[0].get("youtube_video_id") if safety_rows else None,u.get("description") or "",metadata.get("duration_seconds"))
+                spoken=" ".join(search_phrases(transcript))
+                yt=search_youtube(u.get("title") or "",safety_rows[0].get("youtube_video_id") if safety_rows else None,(u.get("description") or "")+" "+spoken,metadata.get("duration_seconds"))
+                findings["review_priority"]=review_priority(matches,yt,transcript,scene_data)
+                update(upload_id,{"findings":findings})
                 api("/rest/v1/farmday_youtube_similarity_checks?on_conflict=upload_id","POST",{
                     "upload_id":upload_id,"query_text":yt.get("query_text") or u.get("title") or "",
                     "state":yt["state"],"candidates":yt["candidates"],"candidate_count":len(yt["candidates"]),
