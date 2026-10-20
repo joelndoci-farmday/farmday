@@ -112,6 +112,24 @@ def main():
                 others=rows("farmday_media_analysis",{"select":"upload_id,video_sha256,visual_fingerprint,audio_fingerprint","video_analysis_status":"eq.analyzed","limit":"500"})
                 audio_raw=audio.get("fingerprint") if isinstance(audio.get("fingerprint"),list) else []
                 matches=ranked_matches(frames,audio_raw,others,digest,upload_id)
+                # Exact local copies require human review, not a second costly YouTube search.
+                exact=next((m for m in matches if m.get("exact_file")),None)
+                if exact:
+                    first=exact["upload_id"]
+                    original=rows("farmday_upload_safety",{"select":"youtube_video_id","upload_id":"eq."+first,"limit":"1"})
+                    video_id=original[0].get("youtube_video_id") if original else None
+                    evidence={"similar_media":matches,"duplicate_of_upload_id":first,
+                              "duplicate_original_youtube_url":("https://www.youtube.com/watch?v="+video_id) if video_id else None,
+                              "review_priority":{"level":"high","basis":"file_sha256","reason":"Exact duplicate in Farmday"}}
+                    update(upload_id,{"provider":ENGINE,"video_sha256":digest,
+                        "video_analysis_status":"analyzed","audio_analysis_status":audio["status"],
+                        "duplicate_analysis_status":"possible_match","copyright_analysis_status":"requires_rights_evidence",
+                        "findings":evidence,"decision":"hold","decision_reason":"Exact duplicate; administrator review required"})
+                    api("/rest/v1/farmday_upload_safety?upload_id=eq."+upload_id,"PATCH",
+                        {"screening_state":"needs_evidence","auto_review_ready":False})
+                    api("/rest/v1/rpc/farmday_finish_media_job","POST",{"p_upload_id":upload_id,"p_success":True})
+                    stats["analyzed"]+=1
+                    continue
                 scene_data=scenes(dest)
                 transcript=speech(dest)
                 findings={
