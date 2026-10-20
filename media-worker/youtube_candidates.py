@@ -19,7 +19,9 @@ def search(title,own_id=None,description="",duration_seconds=None,spoken_phrases
     if not key:return {"state":"not_configured","candidates":[],"error_code":"missing_youtube_api_key"}
     words=re.findall(r"[^\W_]+",description or "",flags=re.UNICODE)
     long_words=[w for w in words if len(w)>=5 and w.casefold() not in STOP]
-    phrases=[title.strip()]\n    # Spoken phrases are independent of the uploader title and may reveal renamed copies.\n    phrases.extend((p.strip()[:110] for p in (spoken_phrases or []) if len(p.strip()) >= 20))
+    phrases=[title.strip()]
+    # Spoken phrases are independent of the uploader title and may reveal renamed copies.
+    phrases.extend((p.strip()[:110] for p in (spoken_phrases or []) if len(p.strip()) >= 20))
     if len(long_words)>=4:
         phrases.extend([" ".join(long_words[:9])," ".join(long_words[-9:])])
     elif long_words:
@@ -52,7 +54,8 @@ def search(title,own_id=None,description="",duration_seconds=None,spoken_phrases
         title_score=score(title,c["title"]);desc_score=score(description,c["description"]) if description else 0
         cd=c.get("duration_seconds")
         duration_score=round(max(0,1-abs(cd-duration_seconds)/max(cd,duration_seconds,1)),3) if cd is not None and duration_seconds else None
-        spoken_score=max((score(phrase,c["title"]+" "+c["description"]) for phrase in (spoken_phrases or [])),default=0.0)\n        ranking=round(.35*title_score+.15*desc_score+.20*spoken_score+(.30*duration_score if duration_score is not None else 0),3)
+        spoken_score=max((score(phrase,c["title"]+" "+c["description"]) for phrase in (spoken_phrases or [])),default=0.0)
+        ranking=round(.35*title_score+.15*desc_score+.20*spoken_score+(.30*duration_score if duration_score is not None else 0),3)
         if title_score<.10 and desc_score<.12 and spoken_score<.10 and (duration_score is None or duration_score<.985):continue
         c.update({"title_similarity":title_score,"spoken_phrase_similarity":spoken_score,"description_similarity":desc_score,"duration_similarity":duration_score,"metadata_rank":ranking,"match_type":"youtube_metadata_candidate_unverified","duration_delta_seconds":round(abs(cd-duration_seconds),2) if cd is not None and duration_seconds is not None else None})
         candidates.append(c)
