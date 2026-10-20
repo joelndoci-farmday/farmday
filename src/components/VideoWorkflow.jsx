@@ -3,13 +3,14 @@ import {supabase} from '../lib/supabase';
 import {ExternalLink,RefreshCw} from 'lucide-react';
 import AdminVideoPreview from './AdminVideoPreview';
 const MAX_PROCESSING_MS=60*60*1000;
+const cloudAnalysisComplete=(job,report)=>job?.state==='completed' && ['farmday-cloud-intelligence-v3','farmday-cloud-unified-v2'].includes(report?.provider) && report?.video_analysis_status==='analyzed' && ['analyzed','no_audio_stream'].includes(report?.audio_analysis_status);
 const TABS=[['processing','YouTube Processing'],['review','Ready for Review'],['published','Published'],['rejection','Rejected / Needs Evidence'],['monetization','Monetization Review'],['issues','YouTube Issues']];
 function ReviewChecks({s={},report,job}) {
  const done=(label,note)=>({label,note,ok:true});
  const pending=(label,note)=>({label,note,ok:false});
  const checks=[
   s.youtube_video_id?done('Video received','Upload registered'):pending('Video received','Waiting for upload'),
-  s.youtube_processing==='processed'?done('Technical processing','Completed'):pending('Technical processing',s.youtube_processing||'Waiting'),
+  s.youtube_processing==='processed'?done('YouTube transcoding','Confirmed completed'):pending('YouTube transcoding',s.youtube_processing==='uploaded_private'?'Private upload registered; YouTube transcoding not independently confirmed':s.youtube_processing||'Not verified'),
   report?.video_analysis_status==='analyzed' || report?.video_analysis_status==='completed' || report?.video_analysis_status==='server_analyzed'?done('Video analysis','Server analysis complete'):pending('Video analysis',report?.video_analysis_status==='client_sampled_untrusted'?'Browser sample only; server verification pending':report?.video_analysis_status||'Not analyzed'),
   report?.audio_analysis_status==='analyzed'||report?.audio_analysis_status==='completed'?done('Audio analysis','Completed'):pending('Audio analysis',report?.audio_analysis_status||'Not analyzed'),
   job?.state==='completed'?done('Media queue','Server job completed'):pending('Media queue',job?.state?job.state+' · attempt '+job.attempts+'/'+job.max_attempts+(job.last_error?' · '+job.last_error:''):'Awaiting private original / queued analysis'),
@@ -48,9 +49,9 @@ export default function VideoWorkflow(){
    if(publicIds.has(u.id)){result.published.push(u);if(s.monetization_state==='ready_for_monetization')result.monetization.push(u);continue;}
    const explicitlyRejected=s.screening_state==='rejected'||s.youtube_studio_check==='claim'||s.content_check==='flagged'||s.duplicate_check==='suspected'||['failed','terminated'].includes(s.youtube_processing);
    if(explicitlyRejected){result.rejection.push(u);continue;}
-   const analysisComplete=job?.state==='completed' && report?.provider==='farmday-cloud-unified-v2' && report?.video_analysis_status==='analyzed' && ['analyzed','no_audio_stream'].includes(report?.audio_analysis_status);
+   const analysisComplete=cloudAnalysisComplete(job,report);
    if(job?.state==='failed'||(s.screening_state==='needs_evidence'&&job?.state!=='queued'&&job?.state!=='running')){result.rejection.push(u);continue;}
-   if(!s.youtube_video_id||s.youtube_processing!=='processed'||!analysisComplete){result.processing.push(u);continue;}
+   if(!s.youtube_video_id||!analysisComplete){result.processing.push(u);continue;}
    result.review.push(u);
   }
   result.issues=issues;return result;
