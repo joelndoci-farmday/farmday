@@ -1,11 +1,6 @@
-name: FarmDay private media analysis
+name: FarmDay media analysis on upload
 on:
   workflow_dispatch:
-    inputs:
-      upload_id:
-        description: 'Optional upload UUID (blank = pending originals)'
-        required: false
-        type: string
   repository_dispatch:
     types: [farmday_media_ready]
 permissions:
@@ -15,20 +10,30 @@ concurrency:
   cancel-in-progress: false
 jobs:
   analyze:
+    if: github.repository == 'joelndoci-farmday/farmday'
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    if: github.repository == 'joelndoci-farmday/farmday'
+    env:
+      SUPABASE_URL: ${{ secrets.FARMDAY_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FARMDAY_SUPABASE_SERVICE_ROLE_KEY }}
+      FARMDAY_YOUTUBE_API_KEY: ${{ secrets.FARMDAY_YOUTUBE_API_KEY }}
+      FARMDAY_BATCH_SIZE: '5'
+      FARMDAY_DRAIN_SECONDS: '2400'
     steps:
       - uses: actions/checkout@v4
-      - name: Install FFmpeg and Chromaprint
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install video and audio engines
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg libchromaprint-tools
-      - name: Test similarity engine
-        run: python3 -m unittest discover -s media-worker -p 'test_*.py' -v
-      - name: Analyze privately stored originals
-        env:
-          SUPABASE_URL: ${{ secrets.FARMDAY_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FARMDAY_SUPABASE_SERVICE_ROLE_KEY }}
-          FARMDAY_YOUTUBE_API_KEY: ${{ secrets.FARMDAY_YOUTUBE_API_KEY }}
-        run: python3 media-worker/cloud_runner.py
+      - name: Check required secrets
+        run: |
+          test -n "$SUPABASE_URL" || { echo "::error::Missing FARMDAY_SUPABASE_URL"; exit 1; }
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo "::error::Missing FARMDAY_SUPABASE_SERVICE_ROLE_KEY"; exit 1; }
+          test -n "$FARMDAY_YOUTUBE_API_KEY" || { echo "::error::Missing FARMDAY_YOUTUBE_API_KEY"; exit 1; }
+      - name: Run unit tests
+        run: python -m unittest discover -s media-worker -p 'test_*.py' -v
+      - name: Drain pending media queue
+        run: python media-worker/drain_queue.py

@@ -3,3 +3,6 @@ dist/
 .env
 .env.*
 !.env.example
+media-worker/worker.env
+__pycache__/
+*.pyc

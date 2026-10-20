@@ -22,13 +22,20 @@ export default function UploadPage(){
  try{
   let signals=null;
   try{signals=await analyzeOriginalFile(file,setAnalysisMessage)}catch(err){setAnalysisMessage('Preliminary fingerprint unavailable: '+err.message)}
-  const requestAnalysis=async()=>{try{const {data}=await supabase.functions.invoke('farmday-media-kick',{body:{session_id:startSessionId}});if(data?.immediate)setAnalysisMessage('Server analysis requested.');else setAnalysisMessage('Server analysis is unavailable without a temporary transfer endpoint; manual review required.')}catch{setAnalysisMessage('Upload complete; server analysis will be retried by the scheduled worker.')}};
+  const requestAnalysis=async()=>{
+    try{
+      const {data,error}=await supabase.functions.invoke('farmday-media-kick',{body:{session_id:startSessionId}});
+      if(error||data?.error)throw new Error(data?.error||error.message);
+      if(data?.immediate)setAnalysisMessage('Cloud analysis requested. Results will appear in Admin after processing.');
+      else setAnalysisMessage('Video queued, but cloud dispatch is not configured or failed: '+(data?.reason||'Check cloud configuration.'));
+    }catch(err){setAnalysisMessage('Video uploaded, but cloud analysis was NOT started: '+(err.message||'Unknown error'));}
+  };
   let startSessionId='';
   const saveSignals=async(uploadId)=>{if(!signals?.sha256||!uploadId)return;const {error}=await supabase.rpc('farmday_submit_client_fingerprints',{p_upload_id:uploadId,p_sha256:signals.sha256,p_visual:signals.visual||'',p_audio:signals.audio||''});setAnalysisMessage(error?'Fingerprint storage pending: '+error.message:'Preliminary fingerprint recorded. Rights and monetization remain unverified.')};
   const {data:start,error:startError}=await supabase.functions.invoke('farmday-youtube-upload',{body:{action:'start',title:title.trim(),description:description.trim(),mime_type:file.type,total_bytes:file.size,terms_version:TERMS_VERSION}});
   if(startError||!start?.session_id)throw new Error(start?.error||startError?.message||'Could not start video upload.');
   startSessionId=start.session_id;
-  // Temporary private original: the server worker deletes it after successful analysis.
+  // Temporary private original: retain until an explicitly verified cleanup phase.
   // Never send the video to YouTube if the required review copy failed.
   await savePrivateReviewCopy(file,user.id,start.session_id);
   setAnalysisMessage('Private analysis copy ready. Server FFmpeg/Chromaprint analysis queued.');
@@ -62,6 +69,6 @@ export default function UploadPage(){
  return <main className="wrap section"><div className="upload-landing"><h1>Upload Video</h1><p className="muted">Share your farming story with the Farmday community.</p></div>{open&&<div className="upload-overlay" role="presentation"><section className="upload-dialog" role="dialog" aria-modal="true" aria-label="Upload video"><button className="upload-close" type="button" onClick={close} disabled={busy} aria-label="Close"><X size={20}/></button>
  {stage==='done'?<div className="upload-result"><UploadCloud size={42}/><h2>Video submitted successfully!</h2><p>Your video is being reviewed by Farmday. Review may take up to 24 hours, but this is an estimate, not a guarantee. You can leave this page now.</p><button className="btn primary" onClick={close}>Done</button></div>:
  stage==='uploading'?<div className="upload-result"><UploadCloud size={42}/><h2>Uploading your video… {progress}%</h2><progress max="100" value={progress} style={{width:'100%'}}/><p>Please keep this page open until the upload is complete. Do not close the browser yet.</p></div>:
- <form className="form" onSubmit={submit}><h2>Choose your video</h2><label className="file-select"><UploadCloud size={25}/><span>{file?file.name:'Choose video from your phone gallery or computer folder'}</span><input type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v,video/*" required onChange={e=>setFile(e.target.files?.[0]||null)}/></label><p className="muted fine">MP4, MOV, WebM or M4V · Maximum 1 GB</p><label>Video title<input required minLength={5} maxLength={180} value={title} onChange={e=>setTitle(e.target.value)}/></label><label>Description (optional)<textarea maxLength={2000} rows={3} value={description} onChange={e=>setDescription(e.target.value)}/></label><div className="rowactions"><button className="btn primary" type="submit" disabled={busy||!file}>Done — Submit for review</button></div><p className="muted fine">Your video will be reviewed before publication.</p></form>}
+ <form className="form" onSubmit={submit}><h2>Choose your video</h2><label className="file-select"><UploadCloud size={25}/><span>{file?file.name:'Choose video from your phone gallery or computer folder'}</span><input type="file" accept="video/mp4,video/quicktime,video/webm,video/x-m4v,video/*" required onChange={e=>setFile(e.target.files?.[0]||null)}/></label><p className="muted fine">MP4, MOV, WebM or M4V · Maximum 1 GB</p><label>Video title<input required minLength={5} maxLength={180} value={title} onChange={e=>setTitle(e.target.value)}/></label><label>Description (optional)<textarea maxLength={2000} rows={3} value={description} onChange={e=>setDescription(e.target.value)}/></label><div className="rowactions"><button className="btn primary" type="submit" disabled={busy||!file}>Upload</button></div><p className="muted fine">Share your farming story with the world.</p></form>}
  {message&&<p role="alert" className="notice">{message}</p>}</section></div>}</main>
 }

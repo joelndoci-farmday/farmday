@@ -1,32 +1,54 @@
-"""Find public YouTube candidates by title; never assert copyright infringement."""
-import os, re, json, urllib.request, urllib.parse, urllib.error
-
+"""YouTube public metadata candidate search; never labels a title match as copyright proof."""
+import os, re, json, urllib.request, urllib.parse, urllib.error, datetime
 STOP={"the","and","for","with","from","video","official","a","an","of","in","on","at","to","my"}
 def tokens(s):
-    return set(w for w in re.findall(r"[\w]+",(s or "").casefold()) if len(w)>2 and w not in STOP)
+    return set(w for w in re.findall(r"[^\W_]+",(s or "").casefold()) if len(w)>2 and w not in STOP)
 def score(a,b):
     x,y=tokens(a),tokens(b)
-    return round(len(x&y)/len(x|y),3) if x and y else 0
-def search(title,own_id=None):
+    return round(len(x&y)/len(x|y),3) if x and y else 0.0
+def request(endpoint,params,key):
+    params={**params,"key":key}
+    url="https://www.googleapis.com/youtube/v3/"+endpoint+"?"+urllib.parse.urlencode(params)
+    with urllib.request.urlopen(urllib.request.Request(url),timeout=25) as response:return json.load(response)
+def seconds(duration):
+    m=re.fullmatch(r"P(?:([0-9]+)D)?T?(?:([0-9]+)H)?(?:([0-9]+)M)?(?:([0-9]+)S)?",duration or "")
+    if not m:return None
+    d,h,mi,s=(int(x or 0) for x in m.groups());return d*86400+h*3600+mi*60+s
+def search(title,own_id=None,description="",duration_seconds=None):
     key=os.environ.get("FARMDAY_YOUTUBE_API_KEY","").strip()
-    if not key: return {"state":"not_configured","candidates":[],"error_code":"missing_youtube_api_key"}
-    query=" ".join(sorted(tokens(title))[:8]) or title
-    params=urllib.parse.urlencode({"part":"snippet","type":"video","maxResults":25,"q":query,"key":key})
-    req=urllib.request.Request("https://www.googleapis.com/youtube/v3/search?"+params)
-    try:
-        with urllib.request.urlopen(req,timeout=25) as resp: data=json.load(resp)
-    except urllib.error.HTTPError as e:
-        return {"state":"search_error","candidates":[],"error_code":"youtube_http_"+str(e.code)}
-    except Exception:
-        return {"state":"search_error","candidates":[],"error_code":"youtube_request_failed"}
-    found=[]
-    for item in data.get("items",[]):
-        vid=item.get("id",{}).get("videoId")
-        if not vid or vid==own_id: continue
-        sn=item.get("snippet") or {}
-        candidate_title=sn.get("title","")
-        rank=score(title,candidate_title)
-        if rank<0.15: continue
-        found.append({"video_id":vid,"title":candidate_title,"channel":sn.get("channelTitle",""),"url":"https://www.youtube.com/watch?v="+vid,"title_similarity":rank,"match_type":"title_candidate_unverified"})
-    found.sort(key=lambda x:x["title_similarity"],reverse=True)
-    return {"state":"candidates_found_not_verified" if found else "no_title_candidates","candidates":found[:15],"error_code":None,"query_text":query}
+    if not key:return {"state":"not_configured","candidates":[],"error_code":"missing_youtube_api_key"}
+    phrases=[title.strip()," ".join(sorted(tokens(title))[:7])," ".join(sorted(tokens(description))[:6])]
+    phrases=list(dict.fromkeys(x for x in phrases if x))[:3]
+    if not phrases:return {"state":"insufficient_metadata","candidates":[],"error_code":"no_search_terms"}
+    found={}; errors=[]
+    for phrase in phrases:
+        try:
+            data=request("search",{"part":"snippet","type":"video","maxResults":25,"q":phrase},key)
+            for item in data.get("items",[]):
+                vid=item.get("id",{}).get("videoId");sn=item.get("snippet") or {}
+                if vid and vid!=own_id:found.setdefault(vid,{"video_id":vid,"title":sn.get("title", ""),"description":sn.get("description", ""),"channel":sn.get("channelTitle", ""),"published_at":sn.get("publishedAt"),"url":"https://www.youtube.com/watch?v="+vid})
+        except urllib.error.HTTPError as e:errors.append("youtube_http_"+str(e.code))
+        except (urllib.error.URLError,TimeoutError,ValueError) as e:errors.append(type(e).__name__)
+    ids=list(found)
+    for start in range(0,len(ids),50):
+        try:
+            data=request("videos",{"part":"contentDetails,status,statistics,snippet","id":",".join(ids[start:start+50])},key)
+            for item in data.get("items",[]):
+                c=found.get(item["id"])
+                if not c:continue
+                c["duration_seconds"]=seconds(item.get("contentDetails",{}).get("duration"))
+                c["licensed_content"]=item.get("contentDetails",{}).get("licensedContent")
+                c["view_count"]=int(item.get("statistics",{}).get("viewCount",0))
+                c["description"]=item.get("snippet",{}).get("description",c["description"])
+        except (urllib.error.HTTPError,urllib.error.URLError,TimeoutError,ValueError) as e:errors.append("details_"+type(e).__name__)
+    candidates=[]
+    for c in found.values():
+        title_score=score(title,c["title"]);desc_score=score(description,c["description"]) if description else 0
+        cd=c.get("duration_seconds")
+        duration_score=round(max(0,1-abs(cd-duration_seconds)/max(cd,duration_seconds,1)),3) if cd is not None and duration_seconds else None
+        ranking=round(.75*title_score+.15*desc_score+(.10*duration_score if duration_score is not None else 0),3)
+        if title_score<.10 and desc_score<.12:continue
+        c.update({"title_similarity":title_score,"description_similarity":desc_score,"duration_similarity":duration_score,"metadata_rank":ranking,"match_type":"youtube_metadata_candidate_unverified"})
+        candidates.append(c)
+    candidates.sort(key=lambda x:x["metadata_rank"],reverse=True)
+    return {"state":"search_partial" if errors else ("candidates_found_not_verified" if candidates else "no_metadata_candidates"),"candidates":candidates[:20],"error_code":",".join(sorted(set(errors))) or None,"query_text":" | ".join(phrases)}
