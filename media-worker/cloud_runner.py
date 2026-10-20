@@ -168,8 +168,8 @@ def main():
                 upload_rows=rows("farmday_uploads",{"select":"title,description","id":"eq."+upload_id,"limit":"1"})
                 safety_rows=rows("farmday_upload_safety",{"select":"youtube_video_id","upload_id":"eq."+upload_id,"limit":"1"})
                 u=upload_rows[0] if upload_rows else {}
-                spoken=" ".join(search_phrases(transcript))
-                yt=search_youtube(u.get("title") or "",safety_rows[0].get("youtube_video_id") if safety_rows else None,(u.get("description") or "")+" "+spoken,metadata.get("duration_seconds"))
+                spoken_phrases=search_phrases(transcript)
+                yt=search_youtube(u.get("title") or "",safety_rows[0].get("youtube_video_id") if safety_rows else None,u.get("description") or "",metadata.get("duration_seconds"),spoken_phrases=spoken_phrases)
                 findings["review_priority"]=review_priority(matches,yt,transcript,scene_data)
                 if external_matches:
                     findings["review_priority"]={"level":"high","basis":"user_supplied_external_fingerprint","reason":"Strong A/V match with registered external reference; verify provenance and rights"}
