@@ -76,3 +76,19 @@ def music_activity(path):
         return {"status":"analyzed","silence_events":len(re.findall(r"silence_start:",result.stderr)),"song_identification":"not_available_without_reference_catalog","rights_verified":False}
     except (OSError,subprocess.TimeoutExpired):
         return {"status":"unavailable","reason":"audio_processing_failed","rights_verified":False}
+
+def vision_frame_urls(path, duration_seconds, count=3):
+    """Create low-resolution data URLs for optional vision review; never persist images."""
+    import base64
+    try:
+        duration=float(duration_seconds or 0)
+        if duration<=0:return []
+        frames=[]
+        for i in range(min(3,max(0,int(count)))):
+            at=duration*(i+0.5)/3
+            p=subprocess.run(["ffmpeg","-nostdin","-hide_banner","-loglevel","error","-ss",str(at),"-i",str(path),"-frames:v","1","-vf","scale=320:-2","-q:v","8","-f","image2pipe","-vcodec","mjpeg","-"],capture_output=True,timeout=40)
+            if p.returncode==0 and 0<len(p.stdout)<120000:
+                frames.append("data:image/jpeg;base64,"+base64.b64encode(p.stdout).decode("ascii"))
+        return frames
+    except (OSError,ValueError,TypeError,subprocess.TimeoutExpired):
+        return []
