@@ -141,6 +141,8 @@ def main():
                 vision_evidence={"status":"skipped","reason":"no_owner_or_vision_not_configured"}
                 if owner_id:
                     vision_evidence=optional_openai_vision(dest,metadata.get("duration_seconds"))
+                    if vision_evidence.get("status")!="analyzed":
+                        raise RuntimeError("Mandatory OpenAI vision analysis incomplete: "+str(vision_evidence.get("status")))
                     if vision_evidence.get("status")=="analyzed":
                         usage=vision_evidence.get("usage") or {}
                         api("/rest/v1/farmday_ai_usage_costs","POST",{
