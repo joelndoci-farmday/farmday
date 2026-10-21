@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 from analyze import visual_hashes, audio_fp, media_metadata
+from similarity import audio_match
 
 
 def frame_alignment(source, candidate):
@@ -28,7 +29,7 @@ def frame_alignment(source, candidate):
     return round(best, 3)
 
 
-def verify(source_path, source_frames, source_duration, candidates, max_candidates=3):
+def verify(source_path, source_frames, source_duration, candidates, source_audio=None, max_candidates=3):
     """Download only short, public candidate media and compare frame sequences.
     A verified match means audiovisual similarity, never proof of ownership.
     """
@@ -64,11 +65,13 @@ def verify(source_path, source_frames, source_duration, candidates, max_candidat
                     continue
                 candidate_frames = visual_hashes(path)
                 visual = frame_alignment(source_frames, candidate_frames)
-                # Strong ordered visual agreement across at least six distinct samples.
-                matched = visual >= .88 and len(source_frames) >= 6
+                # Require both independent signals when the original contains audio.
+                candidate_audio = audio_fp(path).get("fingerprint") if source_audio else []
+                sound = audio_match(source_audio, candidate_audio) if source_audio else None
+                matched = visual >= .88 and len(source_frames) >= 6 and (sound is None or sound >= .70)
                 results.append({"video_id": vid, "url": item.get("url"),
                                 "status": "verified_visual_duplicate" if matched else "not_matched",
-                                "visual_alignment": visual,
+                                "visual_alignment": visual, "audio_alignment": sound,
                                 "sample_count": len(source_frames),
                                 "note": "Visual similarity does not establish copyright ownership."})
             except (OSError, ValueError, subprocess.TimeoutExpired):
