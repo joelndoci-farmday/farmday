@@ -193,6 +193,13 @@ def main():
                 spoken_phrases=search_phrases(transcript)
                 yt=search_youtube(u.get("title") or "",safety_rows[0].get("youtube_video_id") if safety_rows else None,u.get("description") or "",metadata.get("duration_seconds"),spoken_phrases=spoken_phrases)
                 findings["review_priority"]=review_priority(matches,yt,transcript,scene_data)
+                # Metadata candidates are leads, not verified audiovisual duplicates.
+                strong_candidates=[x for x in yt.get("candidates",[]) if x.get("metadata_rank",0)>=0.72 and x.get("duration_similarity",0)>=0.97 and (x.get("title_similarity",0)>=0.45 or x.get("spoken_phrase_similarity",0)>=0.45)]
+                findings["youtube_candidate_links"]=[{"url":x["url"],"title":x.get("title",""),"metadata_rank":x.get("metadata_rank")} for x in strong_candidates[:5]]
+                if strong_candidates:
+                    findings["review_priority"]={"level":"review","basis":"youtube_metadata_candidate","reason":"Strong metadata candidate; no audiovisual proof; administrator must verify"}
+                    api("/rest/v1/farmday_upload_safety?upload_id=eq."+upload_id,"PATCH",
+                        {"screening_state":"needs_evidence","auto_review_ready":False})
                 if matches or external_matches:
                     findings["review_priority"]={"level":"high","basis":"media_fingerprint_similarity","reason":"Possible duplicate in Farmday or registered external reference; admin review required"}
                     api("/rest/v1/farmday_upload_safety?upload_id=eq."+upload_id,"PATCH",
