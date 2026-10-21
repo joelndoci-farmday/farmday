@@ -138,8 +138,8 @@ def main():
                 music_evidence={"status":"fingerprinted" if audio_raw else "unavailable","chromaprint_samples":len(audio_raw),"song_identified":False,"rights_verified":False,"note":"Local fingerprint available for reference comparisons; no global song catalog."}
                 owner_rows=rows("farmday_uploads",{"select":"user_id","id":"eq."+upload_id,"limit":"1"})
                 owner_id=owner_rows[0].get("user_id") if owner_rows else None
-                vision_evidence={"status":"disabled","reason":"no_owner"}
-                if owner_id:
+                vision_evidence={"status":"skipped","reason":"no_internal_or_registered_external_similarity; avoid_paid_calls"}
+                if owner_id and (matches or external_matches):
                     vision_evidence=optional_openai_vision(dest,metadata.get("duration_seconds"))
                     if vision_evidence.get("status")=="analyzed":
                         usage=vision_evidence.get("usage") or {}
