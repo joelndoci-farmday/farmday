@@ -6,7 +6,7 @@ from pathlib import Path
 from analyze import sha256, visual_hashes, audio_fp, media_metadata
 from similarity import ranked_matches
 from youtube_candidates import search as search_youtube
-from intelligence import scenes, speech, search_phrases, review_priority
+from intelligence import scenes, speech, search_phrases, review_priority, ten_frame_evidence
 from external_references import compare as compare_external_references
 
 
@@ -143,6 +143,7 @@ def main():
                     "speech_transcript":transcript,
                     "music_screening":music_evidence,
                     "technical_metadata":metadata,
+                    "ten_frame_sampling":ten_frame_evidence(dest,metadata.get("duration_seconds")),
                     "ranking_weights":{"visual":0.60,"audio":0.35,"exact_file":0.05,"title":0.0},
                     "audio_fingerprint_available":audio.get("status")=="analyzed",
                     "comparison_scope":"Uploaded original compared against Farmday fingerprints and explicitly registered external reference fingerprints; no general YouTube audiovisual access",
