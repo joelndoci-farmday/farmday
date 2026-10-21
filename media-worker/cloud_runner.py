@@ -6,7 +6,7 @@ from pathlib import Path
 from analyze import sha256, visual_hashes, audio_fp, media_metadata
 from similarity import ranked_matches
 from youtube_candidates import search as search_youtube
-from intelligence import scenes, speech, search_phrases, review_priority, ten_frame_evidence, music_activity
+from intelligence import scenes, speech, search_phrases, review_priority, ten_frame_evidence, music_activity, optional_openai_vision
 from external_references import compare as compare_external_references
 
 
@@ -136,7 +136,9 @@ def main():
                 scene_data=scenes(dest)
                 transcript=speech(dest)
                 music_evidence={"status":"fingerprinted" if audio_raw else "unavailable","chromaprint_samples":len(audio_raw),"song_identified":False,"rights_verified":False,"note":"Local fingerprint available for reference comparisons; no global song catalog."}
+                vision_evidence=optional_openai_vision(dest,metadata.get("duration_seconds"))
                 findings={
+                    "optional_vision":vision_evidence,
                     "similar_media":matches,
                     "external_reference_matches":external_matches,
                     "scene_analysis":scene_data,
