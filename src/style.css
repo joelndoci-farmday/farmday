@@ -148,3 +148,12 @@
 .farmday-similarity-card small{color:#607168}
 
 .farmday-media-report{margin:8px 0;padding:9px 12px;border-radius:8px;background:#f4f7f4;color:#365442;font-size:12px;line-height:1.6}
+
+/* Farmday internal player and contextual recommendations */
+.farmday-start-video{width:100%;aspect-ratio:16/9;border:0;padding:0;position:relative;display:block;background:#14251c;overflow:hidden;color:white}
+.farmday-start-video img{display:block;width:100%;height:100%;object-fit:cover;opacity:.75}
+.farmday-start-video span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:12px;font-size:18px;font-weight:800;text-shadow:0 2px 8px #000}
+.farmday-related-video{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid #e2e9e2;align-items:center;font-size:13px;font-weight:700}
+.farmday-related-video img{width:105px;aspect-ratio:16/9;object-fit:cover;border-radius:7px;flex-shrink:0}
+.farmday-related-video span{display:flex;align-items:center;gap:5px}
+@media(max-width:700px){.farmday-related-video img{width:90px}}
