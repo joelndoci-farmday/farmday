@@ -6,7 +6,7 @@ from pathlib import Path
 from analyze import sha256, visual_hashes, audio_fp, media_metadata
 from similarity import ranked_matches
 from youtube_candidates import search as search_youtube
-from intelligence import scenes, speech, search_phrases, review_priority, ten_frame_evidence, music_activity, optional_openai_vision
+from intelligence import scenes, speech, search_phrases, review_priority, ten_frame_evidence, music_activity, optional_openai_vision, recognize_music
 from external_references import compare as compare_external_references
 
 
@@ -135,7 +135,7 @@ def main():
                     continue
                 scene_data=scenes(dest)
                 transcript=speech(dest)
-                music_evidence={"status":"fingerprinted" if audio_raw else "unavailable","chromaprint_samples":len(audio_raw),"song_identified":False,"rights_verified":False,"note":"Local fingerprint available for reference comparisons; no global song catalog."}
+                music_evidence=recognize_music(dest) if audio_raw else {"status":"no_audio_fingerprint","matches":[],"rights_verified":False}
                 owner_rows=rows("farmday_uploads",{"select":"user_id","id":"eq."+upload_id,"limit":"1"})
                 owner_id=owner_rows[0].get("user_id") if owner_rows else None
                 vision_evidence={"status":"skipped","reason":"no_internal_or_registered_external_similarity; avoid_paid_calls"}
