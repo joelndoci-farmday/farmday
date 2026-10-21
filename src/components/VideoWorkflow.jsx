@@ -141,7 +141,7 @@ export default function VideoWorkflow(){
  const aiUsers=Object.values(aiFiltered.reduce((o,r)=>{const id=r.user_id||'unknown';if(!o[id])o[id]={id,cost:0,calls:0};o[id].cost+=Number(r.cost_usd||0);o[id].calls+=Number(r.recorded_calls||0);return o},{})).sort((a,b)=>aiSort==='cost_asc'?a.cost-b.cost:aiSort==='calls_desc'?b.calls-a.calls:b.cost-a.cost);
  const aiDays=Object.values(aiFiltered.reduce((o,r)=>{const d=r.day;if(!o[d])o[d]={day:d,cost:0,calls:0};o[d].cost+=Number(r.cost_usd||0);o[d].calls+=Number(r.recorded_calls||0);return o},{})).sort((a,b)=>b.day.localeCompare(a.day));
  const aiVideoCost=(id)=>aiRows.filter(r=>r.upload_id===id).reduce((n,r)=>n+Number(r.cost_usd||0),0);
- const aiUsd=(v)=>'
+ const aiUsd=(v)=>String.fromCharCode(36)+Number(v||0).toFixed(6);
  const ownerName=users[selectedOwner]?.user_name||selectedOwner||'';
  const list=groups[tab]||[];
  function toggle(id){setSelected(a=>a.includes(id)?a.filter(x=>x!==id):[...a,id])}
