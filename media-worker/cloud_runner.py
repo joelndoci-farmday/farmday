@@ -196,7 +196,7 @@ def main():
                 findings["review_priority"]=review_priority(matches,yt,transcript,scene_data)
                 # Verify a small number of publicly accessible candidates against ordered frame fingerprints.
                 verify_pool=[x for x in yt.get("candidates",[]) if (x.get("duration_similarity") or 0)>=0.94][:3]
-                verified=verify_youtube(dest,frames,metadata.get("duration_seconds"),verify_pool)
+                verified=verify_youtube(dest,frames,metadata.get("duration_seconds"),verify_pool,source_audio=audio_raw)
                 findings["youtube_visual_verification"]=verified
                 verified_matches=[x for x in verified if x.get("status")=="verified_visual_duplicate"]
                 if verified_matches:
