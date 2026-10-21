@@ -136,7 +136,21 @@ def main():
                 scene_data=scenes(dest)
                 transcript=speech(dest)
                 music_evidence={"status":"fingerprinted" if audio_raw else "unavailable","chromaprint_samples":len(audio_raw),"song_identified":False,"rights_verified":False,"note":"Local fingerprint available for reference comparisons; no global song catalog."}
-                vision_evidence=optional_openai_vision(dest,metadata.get("duration_seconds"))
+                owner_rows=rows("farmday_uploads",{"select":"user_id","id":"eq."+upload_id,"limit":"1"})
+                owner_id=owner_rows[0].get("user_id") if owner_rows else None
+                vision_evidence={"status":"disabled","reason":"no_owner"}
+                if owner_id:
+                    vision_evidence=optional_openai_vision(dest,metadata.get("duration_seconds"))
+                    if vision_evidence.get("status")=="analyzed":
+                        usage=vision_evidence.get("usage") or {}
+                        api("/rest/v1/farmday_ai_usage_costs","POST",{
+                            "user_id":owner_id,"upload_id":upload_id,"provider":"openai",
+                            "model":vision_evidence.get("model"),"operation":"vision_review",
+                            "input_tokens":int(usage.get("input_tokens") or 0),
+                            "output_tokens":int(usage.get("output_tokens") or 0),
+                            "cost_usd":vision_evidence.get("cost_usd_estimate") or 0,
+                            "provider_request_id":vision_evidence.get("response_id")
+                        })
                 findings={
                     "optional_vision":vision_evidence,
                     "similar_media":matches,
