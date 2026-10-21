@@ -112,3 +112,27 @@ def optional_openai_vision(path, duration_seconds):
         return {"status":"analyzed","model":model,"response_id":data.get("id"),"usage":usage,"summary":" ".join(x.get("text","") for o in data.get("output",[]) for x in o.get("content",[]) if x.get("type")=="output_text")[:1400],"cost_usd_estimate":round((max(0,int(usage.get("input_tokens") or 0)-int((usage.get("input_tokens_details") or {}).get("cached_tokens") or 0))*0.40+int((usage.get("input_tokens_details") or {}).get("cached_tokens") or 0)*0.10+int(usage.get("output_tokens") or 0)*1.60)/1000000,8),"cost_status":"estimated_from_2026_model_rates"}
     except (urllib.error.URLError,TimeoutError,ValueError) as error:
         return {"status":"failed","reason":type(error).__name__}
+
+def recognize_music(path):
+    """Optional AcoustID lookup on the uploader-provided audio, not a YouTube download."""
+    import urllib.parse, urllib.request, urllib.error
+    key=os.environ.get("FARMDAY_ACOUSTID_CLIENT_KEY","").strip()
+    if not key:
+        return {"status":"not_configured","matches":[],"rights_verified":False}
+    try:
+        calc=subprocess.run(["fpcalc","-json","-length","120",str(path)],capture_output=True,text=True,timeout=35)
+        if calc.returncode:return {"status":"unavailable","reason":"fingerprint_failed","matches":[],"rights_verified":False}
+        fingerprint=json.loads(calc.stdout)
+        if not fingerprint.get("fingerprint") or not fingerprint.get("duration"):
+            return {"status":"unavailable","reason":"empty_fingerprint","matches":[],"rights_verified":False}
+        params=urllib.parse.urlencode({"client":key,"duration":int(fingerprint["duration"]),"fingerprint":fingerprint["fingerprint"],"meta":"recordings","format":"json"})
+        req=urllib.request.Request("https://api.acoustid.org/v2/lookup",data=params.encode(),headers={"User-Agent":"Farmday-MediaReview/1.0"},method="POST")
+        with urllib.request.urlopen(req,timeout=25) as response:data=json.load(response)
+        if data.get("status")!="ok":return {"status":"service_error","matches":[],"rights_verified":False}
+        matches=[]
+        for result in (data.get("results") or [])[:5]:
+            for recording in (result.get("recordings") or [])[:3]:
+                matches.append({"score":round(float(result.get("score") or 0),3),"title":recording.get("title"),"recording_id":recording.get("id"),"artists":[a.get("name") for a in recording.get("artists",[]) if a.get("name")]})
+        return {"status":"possible_recordings" if matches else "no_match","matches":matches[:8],"rights_verified":False,"note":"A recording match does not grant music synchronization or monetization rights."}
+    except (OSError,ValueError,TypeError,subprocess.TimeoutExpired,urllib.error.URLError):
+        return {"status":"unavailable","matches":[],"rights_verified":False}
