@@ -23,13 +23,14 @@ function ReviewChecks({s={},report,job}) {
  const vision=findings.optional_vision||{};
  const internalMatches=Array.isArray(findings.similar_media)?findings.similar_media:[];
  const externalMatches=Array.isArray(findings.external_reference_matches)?findings.external_reference_matches:[];
- const suspicious=internalMatches.length+externalMatches.length>0;
+ const youtubeCandidates=Array.isArray(findings.youtube_candidate_links)?findings.youtube_candidate_links:[];
+ const suspicious=internalMatches.length+externalMatches.length+youtubeCandidates.length>0;
  const aiStatus=vision.status==='analyzed'?'complete':job?.state==='failed'?'failed':job?.state==='completed'?'missing':job?.state==='running'||job?.state==='pending'?'pending':'pending';
  const matchUrl=(m)=>{const u=m?.youtube_url||m?.url||m?.source_url||m?.duplicate_original_youtube_url||'';return typeof u==='string'&&/^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(u)?u:null;};
- const urls=[findings.duplicate_original_youtube_url,...internalMatches.map(matchUrl),...externalMatches.map(matchUrl)].filter(u=>typeof u==='string'&&/^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(u));
+ const urls=[findings.duplicate_original_youtube_url,...internalMatches.map(matchUrl),...externalMatches.map(matchUrl),...youtubeCandidates.map(matchUrl)].filter(u=>typeof u==='string'&&/^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(u));
  const uniqueUrls=[...new Set(urls)];
  const confirmed=vision.status==='analyzed'&&job?.state==='completed';
- const aiHeadline=suspicious?'U gjet ngjashmëri / dublikatë e mundshme':confirmed?'Motori nuk gjeti përputhje të dyshimtë':job?.state==='failed'?'Analiza dështoi — kërkohet kontroll':'Kontrolli në proces / pa rezultat të plotë';
+ const aiHeadline=suspicious?'U gjet ngjashmëri / dublikatë e mundshme':confirmed?'Nuk u gjet përputhje në referencat e kontrolluara':job?.state==='failed'?'Analiza dështoi — kërkohet kontroll':'Kontrolli në proces / pa rezultat të plotë';
  const metadata=findings.technical_metadata||{};
  const details=[
   ['Analysis engine',report?.provider||'Not started'],
