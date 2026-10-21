@@ -3,6 +3,14 @@ import unittest
 from intelligence import search_phrases, review_priority, ten_frame_evidence, music_activity, optional_openai_vision
 
 class IntelligenceTests(unittest.TestCase):
+    def test_vision_frame_budget(self):
+        from unittest.mock import patch
+        with patch("intelligence.subprocess.run") as runner:
+            runner.return_value.returncode=0
+            runner.return_value.stdout=b"small-jpeg"
+            frames=__import__("intelligence").vision_frame_urls("unused.mp4",60,10)
+        self.assertEqual(len(frames),3)
+        self.assertEqual(runner.call_count,3)
     def test_paid_vision_disabled_without_opt_in(self):
         from unittest.mock import patch
         with patch.dict("os.environ",{"OPENAI_API_KEY":"test","FARMDAY_OPENAI_VISION_ENABLED":"0"}):
