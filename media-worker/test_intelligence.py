@@ -1,8 +1,14 @@
 """Offline, deterministic checks for FarmDay review intelligence."""
 import unittest
-from intelligence import search_phrases, review_priority, ten_frame_evidence, music_activity, optional_openai_vision
+from intelligence import search_phrases, review_priority, ten_frame_evidence, music_activity, optional_openai_vision, recognize_music
 
 class IntelligenceTests(unittest.TestCase):
+    def test_music_lookup_disabled_without_key(self):
+        from unittest.mock import patch
+        with patch.dict("os.environ",{"FARMDAY_ACOUSTID_CLIENT_KEY":""}):
+            result=recognize_music("unused.mp4")
+        self.assertEqual(result["status"],"not_configured")
+        self.assertFalse(result["rights_verified"])
     def test_vision_frame_budget(self):
         from unittest.mock import patch
         with patch("intelligence.subprocess.run") as runner:
