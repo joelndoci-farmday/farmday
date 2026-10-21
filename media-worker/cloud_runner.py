@@ -191,10 +191,10 @@ def main():
                 safety_rows=rows("farmday_upload_safety",{"select":"youtube_video_id","upload_id":"eq."+upload_id,"limit":"1"})
                 u=upload_rows[0] if upload_rows else {}
                 spoken_phrases=search_phrases(transcript)
-                yt=search_youtube(u.get("title") or "",safety_rows[0].get("youtube_video_id") if safety_rows else None,u.get("description") or "",metadata.get("duration_seconds"),spoken_phrases=spoken_phrases)
+                yt=search_youtube(u.get("title") or "",safety_rows[0].get("youtube_video_id") if safety_rows else None,u.get("description") or "",metadata.get("duration_seconds"),spoken_phrases=spoken_phrases,visual_summary=vision_evidence.get("summary") or "")
                 findings["review_priority"]=review_priority(matches,yt,transcript,scene_data)
                 # Metadata candidates are leads, not verified audiovisual duplicates.
-                strong_candidates=[x for x in yt.get("candidates",[]) if x.get("metadata_rank",0)>=0.72 and x.get("duration_similarity",0)>=0.97 and (x.get("title_similarity",0)>=0.45 or x.get("spoken_phrase_similarity",0)>=0.45)]
+                strong_candidates=[x for x in yt.get("candidates",[]) if (x.get("duration_similarity") or 0)>=0.94 and (x.get("title_similarity",0)>=0.38 or x.get("spoken_phrase_similarity",0)>=0.25 or x.get("visual_summary_similarity",0)>=0.32)]
                 findings["youtube_candidate_links"]=[{"url":x["url"],"title":x.get("title",""),"metadata_rank":x.get("metadata_rank")} for x in strong_candidates[:5]]
                 if strong_candidates:
                     findings["review_priority"]={"level":"review","basis":"youtube_metadata_candidate","reason":"Strong metadata candidate; no audiovisual proof; administrator must verify"}
@@ -208,7 +208,7 @@ def main():
                 api("/rest/v1/farmday_youtube_similarity_checks?on_conflict=upload_id","POST",{
                     "upload_id":upload_id,"query_text":yt.get("query_text") or u.get("title") or "",
                     "state":yt["state"],"candidates":yt["candidates"],"candidate_count":len(yt["candidates"]),
-                    "error_code":yt.get("error_code"),"engine_version":"youtube-metadata-v2"})
+                    "error_code":yt.get("error_code"),"engine_version":"youtube-metadata-scene-v3"})
                 if yt["state"] in ("search_error","not_configured","search_partial"):
                     raise RuntimeError("YouTube candidate search incomplete: "+str(yt.get("error_code") or yt["state"]))
                 api("/rest/v1/rpc/farmday_finish_media_job","POST",{"p_upload_id":upload_id,"p_success":True})
