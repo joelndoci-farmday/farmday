@@ -8,6 +8,16 @@ class YouTubeCandidatesTests(unittest.TestCase):
         self.assertEqual(seconds("PT1H"), 3600)
     def test_score(self):
         self.assertGreater(score("Albanian farming tractor", "Farming tractor in Albania"), 0)
+    def test_spoken_phrase_query_independent_of_title(self):
+        queries=[]
+        def fake_request(endpoint,params,key):
+            if endpoint=="search":
+                queries.append(params["q"])
+                return {"items":[]}
+            return {"items":[]}
+        with patch.dict("os.environ",{"FARMDAY_YOUTUBE_API_KEY":"test"}),patch("youtube_candidates.request",side_effect=fake_request):
+            search("Generic video",spoken_phrases=["An unusually specific explanation of growing winter wheat"])
+        self.assertIn("An unusually specific explanation of growing winter wheat",queries)
     def test_missing_key(self):
         with patch.dict("os.environ", {"FARMDAY_YOUTUBE_API_KEY":""}):
             self.assertEqual(search("Farm video")["state"], "not_configured")
