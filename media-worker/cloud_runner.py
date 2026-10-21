@@ -193,8 +193,8 @@ def main():
                 spoken_phrases=search_phrases(transcript)
                 yt=search_youtube(u.get("title") or "",safety_rows[0].get("youtube_video_id") if safety_rows else None,u.get("description") or "",metadata.get("duration_seconds"),spoken_phrases=spoken_phrases)
                 findings["review_priority"]=review_priority(matches,yt,transcript,scene_data)
-                if external_matches:
-                    findings["review_priority"]={"level":"high","basis":"user_supplied_external_fingerprint","reason":"Strong A/V match with registered external reference; verify provenance and rights"}
+                if matches or external_matches:
+                    findings["review_priority"]={"level":"high","basis":"media_fingerprint_similarity","reason":"Possible duplicate in Farmday or registered external reference; admin review required"}
                     api("/rest/v1/farmday_upload_safety?upload_id=eq."+upload_id,"PATCH",
                         {"screening_state":"needs_evidence","auto_review_ready":False})
                 update(upload_id,{"findings":findings})
