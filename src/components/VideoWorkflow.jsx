@@ -29,7 +29,10 @@ function ReviewChecks({s={},report,job}) {
  const aiNote=aiStatus==='complete'?(suspicious?'Similarity signals are not proof of copyright infringement.':'No flagged match does not prove ownership or check every YouTube video.'):(aiStatus==='failed'||aiStatus==='missing'?'The video must not be cleared solely from technical analysis status.':'Waiting for the mandatory OpenAI vision result.');
  const metadata=findings.technical_metadata||{};
  const details=[
-  ['Analysis engine',report?.provider||'Not started'],\n  ['OpenAI vision',vision.status||'Not recorded'],\n  ['AI scene summary',vision.summary||'No AI scene description recorded'],\n  ['Similarity flags',String(internalMatches.length+externalMatches.length)],
+  ['Analysis engine',report?.provider||'Not started'],
+  ['OpenAI vision',vision.status||'Not recorded'],
+  ['AI scene summary',vision.summary||'No AI scene description recorded'],
+  ['Similarity flags',String(internalMatches.length+externalMatches.length)],
   ['Video result',report?.video_analysis_status||'Pending'],
   ['Audio result',report?.audio_analysis_status||'Pending'],
   ['File hash (SHA-256)',report?.video_sha256||'Pending'],
