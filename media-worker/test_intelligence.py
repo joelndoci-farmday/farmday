@@ -1,8 +1,12 @@
 """Offline, deterministic checks for FarmDay review intelligence."""
 import unittest
-from intelligence import search_phrases, review_priority, ten_frame_evidence, music_activity
+from intelligence import search_phrases, review_priority, ten_frame_evidence, music_activity, optional_openai_vision
 
 class IntelligenceTests(unittest.TestCase):
+    def test_paid_vision_disabled_without_opt_in(self):
+        from unittest.mock import patch
+        with patch.dict("os.environ",{"OPENAI_API_KEY":"test","FARMDAY_OPENAI_VISION_ENABLED":"0"}):
+            self.assertEqual(optional_openai_vision("unused.mp4",10)["status"],"disabled")
     def test_ten_frame_positions(self):
         evidence=ten_frame_evidence("unused.mp4",100)
         self.assertEqual(evidence["count"],10)
