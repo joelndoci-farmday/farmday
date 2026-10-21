@@ -92,3 +92,23 @@ def vision_frame_urls(path, duration_seconds, count=3):
         return frames
     except (OSError,ValueError,TypeError,subprocess.TimeoutExpired):
         return []
+
+def optional_openai_vision(path, duration_seconds):
+    """Off unless explicitly configured. Limit image count and output tokens."""
+    import urllib.request, urllib.error
+    key=os.environ.get("OPENAI_API_KEY","").strip()
+    if not key or os.environ.get("FARMDAY_OPENAI_VISION_ENABLED","0")!="1":
+        return {"status":"disabled","estimated_cost_usd":0,"usage":None}
+    frames=vision_frame_urls(path,duration_seconds,3)
+    if not frames:return {"status":"unavailable","reason":"no_frames"}
+    model=os.environ.get("FARMDAY_OPENAI_VISION_MODEL","gpt-4.1-mini")
+    content=[{"type":"input_text","text":"Describe the scenes, visible watermarks, logos, credits and likely stock footage clues. Do not determine copyright ownership. Return a concise factual description."}]
+    content.extend({"type":"input_image","image_url":url,"detail":"low"} for url in frames)
+    payload={"model":model,"input":[{"role":"user","content":content}],"max_output_tokens":160}
+    req=urllib.request.Request("https://api.openai.com/v1/responses",data=json.dumps(payload).encode(),headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"},method="POST")
+    try:
+        with urllib.request.urlopen(req,timeout=65) as response:data=json.load(response)
+        usage=data.get("usage") or {}
+        return {"status":"analyzed","model":model,"response_id":data.get("id"),"usage":usage,"summary":" ".join(x.get("text","") for o in data.get("output",[]) for x in o.get("content",[]) if x.get("type")=="output_text")[:1400],"cost_status":"requires_current_model_rate"}
+    except (urllib.error.URLError,TimeoutError,ValueError) as error:
+        return {"status":"failed","reason":type(error).__name__}
