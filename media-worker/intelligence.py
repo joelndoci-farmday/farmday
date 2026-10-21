@@ -66,3 +66,13 @@ def ten_frame_evidence(path, duration_seconds=None):
         return {"status":"sampled","timestamps":stamps,"count":len(stamps),"interpretation":"Frames are sampled for visual fingerprints; no external video content recognition is implied"}
     except (TypeError,ValueError,OverflowError):
         return {"status":"unavailable","reason":"invalid_duration","timestamps":[]}
+
+def music_activity(path):
+    """Measure audio activity only; do not mislabel speech as licensed music."""
+    try:
+        result=subprocess.run(["ffmpeg","-nostdin","-hide_banner","-loglevel","info","-i",str(path),"-vn","-af","silencedetect=noise=-35dB:d=1","-f","null","-"],capture_output=True,text=True,timeout=180)
+        if result.returncode:
+            return {"status":"unavailable","reason":"audio_decode_failed","rights_verified":False}
+        return {"status":"analyzed","silence_events":len(re.findall(r"silence_start:",result.stderr)),"song_identification":"not_available_without_reference_catalog","rights_verified":False}
+    except (OSError,subprocess.TimeoutExpired):
+        return {"status":"unavailable","reason":"audio_processing_failed","rights_verified":False}
