@@ -37,6 +37,6 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ffmpeg libchromaprint-tools
-          python -m pip install --disable-pip-version-check faster-whisper==1.2.1
+          python -m pip install --disable-pip-version-check faster-whisper==1.2.1 yt-dlp
       - name: Drain pending media queue
         run: python media-worker/drain_queue.py
