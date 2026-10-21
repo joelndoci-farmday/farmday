@@ -16,6 +16,8 @@ jobs:
       SUPABASE_URL: ${{ secrets.FARMDAY_SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FARMDAY_SUPABASE_SERVICE_ROLE_KEY }}
       FARMDAY_YOUTUBE_API_KEY: ${{ secrets.FARMDAY_YOUTUBE_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.FARMDAY_OPENAI_API_KEY }}
+      FARMDAY_OPENAI_VISION_ENABLED: '1'
       FARMDAY_BATCH_SIZE: '5'
       FARMDAY_DRAIN_SECONDS: '2400'
     steps:
@@ -28,6 +30,7 @@ jobs:
           test -n "$SUPABASE_URL" || { echo "::error::Missing FARMDAY_SUPABASE_URL"; exit 1; }
           test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo "::error::Missing FARMDAY_SUPABASE_SERVICE_ROLE_KEY"; exit 1; }
           test -n "$FARMDAY_YOUTUBE_API_KEY" || { echo "::error::Missing FARMDAY_YOUTUBE_API_KEY"; exit 1; }
+          test -n "$OPENAI_API_KEY" || { echo "::error::Missing FARMDAY_OPENAI_API_KEY; required for every-video visual review"; exit 1; }
       - name: Run unit tests
         run: python -m unittest discover -s media-worker -p 'test_*.py' -v
       - name: Install video and audio engines
