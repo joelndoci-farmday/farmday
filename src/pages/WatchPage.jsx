@@ -28,7 +28,7 @@ export default function WatchPage(){
  })();return()=>{active=false}},[id]);
  const suggestions=relatedVideos(pool,video,8);
  return <main className="wrap section">{loading?<p>Loading video…</p>:!video?<p>Video unavailable or not approved.</p>:<div className="watch"><div>
- <div className="embed"><iframe key={id} src={`https://www.youtube-nocookie.com/embed/${id}?rel=0&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}`} title={video.title||'Farmday video'} allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen onLoad={()=>{}}/></div>
+ <div className="embed">{!started?<button type="button" className="farmday-start-video" onClick={()=>{recordWatch(video);setStarted(true)}} aria-label="Play video on Farmday"><img src={video.thumbnail_url||`https://i.ytimg.com/vi/${id}/hqdefault.jpg`} alt=""/><span><Play size={32} fill="currentColor"/> Play on Farmday</span></button>:<iframe key={id} src={`https://www.youtube-nocookie.com/embed/${id}?rel=0&playsinline=1&autoplay=1`} title={video.title||'Farmday video'} allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen/>}</div>
  <h1>{video.title}</h1><p className="muted">{video.summary||video.description}</p>
  <div className="video-actions"><a className="btn outline" href={yt(id)} target="_blank" rel="noopener noreferrer"><ExternalLink size={16}/> Watch on YouTube</a>{video.id&&<Link className="btn outline" to={'/video/'+video.id}>Comments & Likes</Link>}</div>
  <p className="muted">Videos play here on Farmday using YouTube's official embedded player.</p>
