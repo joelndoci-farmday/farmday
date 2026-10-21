@@ -6,6 +6,7 @@ from pathlib import Path
 from analyze import sha256, visual_hashes, audio_fp, media_metadata
 from similarity import ranked_matches
 from youtube_candidates import search as search_youtube
+from youtube_verify import verify as verify_youtube
 from intelligence import scenes, speech, search_phrases, review_priority, ten_frame_evidence, music_activity, optional_openai_vision, recognize_music
 from external_references import compare as compare_external_references
 
@@ -193,10 +194,21 @@ def main():
                 spoken_phrases=search_phrases(transcript)
                 yt=search_youtube(u.get("title") or "",safety_rows[0].get("youtube_video_id") if safety_rows else None,u.get("description") or "",metadata.get("duration_seconds"),spoken_phrases=spoken_phrases,visual_summary=vision_evidence.get("summary") or "")
                 findings["review_priority"]=review_priority(matches,yt,transcript,scene_data)
+                # Verify a small number of publicly accessible candidates against ordered frame fingerprints.
+                verify_pool=[x for x in yt.get("candidates",[]) if (x.get("duration_similarity") or 0)>=0.94][:3]
+                verified=verify_youtube(dest,frames,metadata.get("duration_seconds"),verify_pool)
+                findings["youtube_visual_verification"]=verified
+                verified_matches=[x for x in verified if x.get("status")=="verified_visual_duplicate"]
+                if verified_matches:
+                    findings["duplicate_original_youtube_url"]=verified_matches[0].get("url")
+                    findings["review_priority"]={"level":"high","basis":"youtube_verified_visual_similarity","reason":"Ordered frame fingerprints strongly match a publicly accessible YouTube video; verify ownership manually"}
+                    api("/rest/v1/farmday_upload_safety?upload_id=eq."+upload_id,"PATCH",
+                        {"screening_state":"needs_evidence","auto_review_ready":False})
+
                 # Metadata candidates are leads, not verified audiovisual duplicates.
                 strong_candidates=[x for x in yt.get("candidates",[]) if (x.get("duration_similarity") or 0)>=0.94 and (x.get("title_similarity",0)>=0.38 or x.get("spoken_phrase_similarity",0)>=0.25 or x.get("visual_summary_similarity",0)>=0.32)]
                 findings["youtube_candidate_links"]=[{"url":x["url"],"title":x.get("title",""),"metadata_rank":x.get("metadata_rank")} for x in strong_candidates[:5]]
-                if strong_candidates:
+                if strong_candidates and not verified_matches:
                     findings["review_priority"]={"level":"review","basis":"youtube_metadata_candidate","reason":"Strong metadata candidate; no audiovisual proof; administrator must verify"}
                     api("/rest/v1/farmday_upload_safety?upload_id=eq."+upload_id,"PATCH",
                         {"screening_state":"needs_evidence","auto_review_ready":False})
@@ -204,7 +216,10 @@ def main():
                     findings["review_priority"]={"level":"high","basis":"media_fingerprint_similarity","reason":"Possible duplicate in Farmday or registered external reference; admin review required"}
                     api("/rest/v1/farmday_upload_safety?upload_id=eq."+upload_id,"PATCH",
                         {"screening_state":"needs_evidence","auto_review_ready":False})
-                update(upload_id,{"findings":findings})
+                if verified_matches:
+                    update(upload_id,{"findings":findings,"duplicate_analysis_status":"possible_match"})
+                else:
+                    update(upload_id,{"findings":findings})
                 api("/rest/v1/farmday_youtube_similarity_checks?on_conflict=upload_id","POST",{
                     "upload_id":upload_id,"query_text":yt.get("query_text") or u.get("title") or "",
                     "state":yt["state"],"candidates":yt["candidates"],"candidate_count":len(yt["candidates"]),
